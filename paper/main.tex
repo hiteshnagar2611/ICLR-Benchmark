@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass[9pt]{article}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -11,6 +11,9 @@
 \usepackage{subcaption}
 \usepackage{xcolor}
 \usepackage{array}
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+\setlist[itemize]{nosep, leftmargin=1.5em}
 
 \newcommand{\model}[1]{\texttt{#1}}
 
@@ -27,250 +30,152 @@
 \maketitle
 
 \begin{abstract}
-Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 9 protein and 4 nucleotide foundation models on 29,595 ClinVar missense variants, using two scoring paradigms (masked language model probability and cosine similarity), and compare against AlphaMissense and REVEL. We further analyze model representations using Centered Kernel Alignment (CKA) and linear probing across 11 architectures. To avoid data leakage, we evaluate exclusively under a \textbf{gene-disjoint} protocol where no gene appears in both training and test sets. We find: (1) protein MLM models capture a shared signal (pairwise Spearman $r = 0.68$--$0.83$) while nucleotide models are nearly orthogonal ($r \approx 0.00$) to protein models; (2) CKA analysis confirms cross-modality orthogonality (mean CKA = 0.044), with protein models forming a high-similarity cluster (ESM1b--ESM-1v: 0.772) and nucleotide models showing weak mutual similarity (mean 0.047); (3) linear probing shows pathogenicity information accumulates monotonically across layers; (4) a lightweight XGBoost meta-learner fusing 20 foundation model scores with 9 physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data; (5) model disagreement patterns correlate with biologically meaningful properties (BLOSUM62 $r = -0.181$, Grantham $r = 0.180$). These results establish that protein language models capture most pathogenicity-relevant signal, and that nucleotide models provide genuinely complementary information---a finding with implications for multi-modal biological representation learning.
+Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 12 protein and nucleotide foundation models on 29,595 ClinVar missense variants and analyze their representations via Centered Kernel Alignment (CKA) and linear probing. To avoid data leakage, we evaluate under a \textbf{gene-disjoint} protocol where no gene appears in both training and test sets. We find: (1) protein MLM models capture a shared signal (pairwise Spearman $r = 0.68$--$0.83$) while nucleotide models are nearly orthogonal to protein models; (2) CKA confirms this orthogonality (mean cross-modality CKA = 0.044), with all models encoding pathogenicity through geometric reorganization of representations; (3) linear probing shows pathogenicity information accumulates monotonically across layers; (4) a lightweight XGBoost meta-learner fusing 20 foundation model scores with 9 physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data.
 \end{abstract}
 
 \section{Introduction}
 
-The prediction of whether a genetic variant is pathogenic or benign is central to clinical genomics \cite{rentzsch2019predicting}. Recent foundation models trained on protein sequences \cite{elnaggar2022prottrans, li2023esm1b, lin2023evolutionary} and nucleotide sequences \cite{dalla2024nucleotide, zeng2024dnabert2} offer the promise of zero-shot variant effect prediction without task-specific training.
+The prediction of whether a genetic variant is pathogenic or benign is central to clinical genomics \cite{rentzsch2019predicting}. Recent foundation models trained on protein sequences \cite{elnaggar2022prottrans, li2023esm1b, lin2023evolutionary, esm3team2024esm3, meier2021language} and nucleotide sequences \cite{dalla2024nucleotide, zeng2024dnabert2, nguyen2023hyenadna, singh2024genalm} offer zero-shot variant effect prediction without task-specific training. Specialized tools like AlphaMissense \cite{cheng2023alphamissense} and REVEL \cite{ioannidis2016revel} achieve high performance but rely on population frequency data unavailable in a pure zero-shot setting.
 
-However, several critical questions remain unanswered:
-\begin{itemize}
-    \item How do protein-space and nucleotide-space models compare on a controlled benchmark?
-    \item Do nucleotide models provide information orthogonal to protein models?
-    \item What properties of a variant make it easy or hard for different model classes?
-    \item Can a lightweight fusion of foundation model scores match specialized tools like AlphaMissense \cite{cheng2023alphamissense} that use population frequency data?
-\end{itemize}
+Existing benchmarks suffer from two limitations. First, they evaluate on random train/test splits \cite{promponas2020predicting, pei2021identifying}, which can leak gene-level information. Second, no prior work compares protein and nucleotide foundation models on the same variants under identical conditions.
 
-Existing benchmarks suffer from two limitations. First, they typically evaluate models on random train/test splits \cite{promponas2020predicting}, which can leak gene-level information between splits. Second, no prior work compares protein and nucleotide foundation models on the same variant dataset under identical evaluation conditions.
-
-We address these gaps by systematically benchmarking 13 foundation models (9 protein, 4 nucleotide) on 29,595 ClinVar missense variants across two scoring paradigms. We use a strict \textbf{gene-disjoint} evaluation protocol where no gene appears in both train and test sets, and validate on a temporally independent dataset (D2). We provide detailed analyses of model agreement structure, representation geometry via Centered Kernel Alignment (CKA), linear probing of information content, variant difficulty spectra, biological correlates, and multi-modal fusion ablations.
+We address these gaps by benchmarking 7 protein and 4 nucleotide foundation models (12 scoring variants) on 29,595 ClinVar missense variants using a strict \textbf{gene-disjoint} evaluation protocol and validating on a temporally independent dataset (D2). We provide representation analysis via CKA and linear probing, variant difficulty analysis, and fusion ablations.
 
 \textbf{Contributions:}
 \begin{enumerate}
-    \item The first controlled benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation on the same variants.
-    \item Representation analysis via CKA confirming that protein and nucleotide models capture nearly orthogonal information (mean cross-modality CKA = 0.044), with protein models forming a high-similarity cluster (ESM1b--ESM-1v: 0.772) and all models encoding pathogenicity through geometric reorganization of representations (pathogenic-vs-benign CKA $<$ 0.025).
-    \item Linear probing demonstrating that pathogenicity information accumulates monotonically across layers, with protein models encoding pathogenicity as a geometric reorganization of representations.
-    \item A lightweight meta-learner (AUROC 0.933 gene-disjoint) that approaches AlphaMissense without population frequency data.
-    \item Analysis of what makes variants hard: cross-modal disagreement correlates with BLOSUM62, Grantham distance, and cysteine changes.
+    \item First controlled benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation on the same variants.
+    \item CKA analysis confirming protein--nucleotide orthogonality (mean CKA = 0.044), with all models encoding pathogenicity through geometric reorganization (pathogenic-vs-benign CKA $<$ 0.025).
+    \item Linear probing showing pathogenicity information accumulates monotonically across layers.
+    \item A lightweight meta-learner (AUROC 0.933 gene-disjoint) approaching AlphaMissense without population frequency data.
 \end{enumerate}
-
-\section{Related Work}
-
-\paragraph{Protein Language Models.} Pre-trained protein language models such as ESM-1b \cite{li2023esm1b}, ESM-2 \cite{lin2023evolutionary}, ESM-1v \cite{meier2021language}, ProtBERT \cite{elnaggar2022prottrans}, and ESM3 \cite{esm3team2024esm3} learn evolutionary representations from millions of sequences. These models can compute per-residue likelihoods and have been applied to variant pathogenicity prediction \cite{promponas2020predicting, pei2021identifying}. ProteinGym provides benchmarks for protein fitness prediction but focuses on deep mutational scanning, not clinical variant classification.
-
-\paragraph{Nucleotide Language Models.} Recent work has extended the foundation model paradigm to raw nucleotide sequences. Nucleotide Transformer v2 \cite{dalla2024nucleotide}, DNABERT \cite{ji2021dnabert}, DNABERT-2 \cite{zeng2024dnabert2}, HyenaDNA \cite{nguyen2023hyenadna}, and GenALM \cite{singh2024genalm} represent DNA at various scales. These models have been applied to regulatory variant interpretation but have not been systematically compared against protein-space models on the same clinical variant dataset.
-
-\paragraph{Variant Effect Prediction.} Specialized tools like AlphaMissense \cite{cheng2023alphamissense} leverage population allele frequencies from gnomAD alongside protein models, achieving high performance. REVEL \cite{ioannidis2016revel} combines multiple individual predictors. These tools achieve high performance but require external data not available in a pure zero-shot setting.
-
-\paragraph{Gaps in the Literature.} No prior work provides: (1) a controlled multi-modal comparison of protein and nucleotide foundation models on the same variant dataset, (2) evaluation under gene-disjoint protocols that prevent data leakage, or (3) analysis of model agreement structure and its biological correlates.
 
 \section{Methods}
 
 \subsection{Datasets}
 
-We use two ClinVar-derived datasets:
+\textbf{D1 (Primary):} 29,595 missense variants (15,540 Pathogenic + 14,055 Benign) across 6,371 genes from ClinVar.
 
-\paragraph{D1 (Primary).} 29,595 missense variants (15,540 Pathogenic + 14,055 Benign) across 6,371 genes. Pathogenic and benign labels are derived from ClinVar clinical significance, with variants labeled \textit{Pathogenic} or \textit{Likely pathogenic} treated as positive, and \textit{Benign} or \textit{Likely benign} as negative.
+\textbf{D2 (Temporal Holdout):} 9,627 missense variants (3,865 Pathogenic + 5,762 Benign) from a later ClinVar release (Jan 2025), spanning 2,569 genes. All D2 genes are a subset of D1 genes.
 
-\paragraph{D2 (Temporal Holdout).} 9,627 missense variants (3,865 Pathogenic + 5,762 Benign) from a later ClinVar release (January 2025), spanning 2,569 genes. All D2 genes are a subset of D1 genes, making D2 a temporal validation set.
+Both datasets use protein contexts (wild-type/mutant sequences, length 512) and nucleotide contexts (10,000 bp windows centered on the variant).
 
-Both datasets are preprocessed to ensure clean protein contexts (wild-type and mutant protein sequences of length 512 centered on the variant position) and nucleotide contexts (10,000 bp windows centered on the variant).
+\subsection{Gene-Disjoint Evaluation}
 
-\subsection{Gene-Disjoint Evaluation Protocol}
-
-A critical methodological contribution of our work is the \textbf{gene-disjoint} evaluation protocol. Standard random train/test splits allow the same gene to appear in both splits, which inflates performance estimates due to gene-level correlations in model predictions.
-
-We use scikit-learn's \texttt{GroupShuffleSplit} with \texttt{gene\_symbol} as the group key ($test\_size = 0.2$, $random\_state = 42$). This ensures:
-\begin{itemize}
-    \item 5,096 genes (23,113 variants) for training
-    \item 1,275 genes (6,482 variants) for testing
-    \item \textbf{Zero gene overlap} between train and test
-    \item Label balance maintained (train: 51.6\% pathogenic, test: 55.7\% pathogenic)
-\end{itemize}
-
-For comparison, we also report results under the standard random split (80\% variants, stratified by label) to quantify the effect of data leakage.
+We use \texttt{GroupShuffleSplit} with \texttt{gene\_symbol} as the group key ($test\_size = 0.2$, $random\_state = 42$): 5,096 train genes (23,113 variants), 1,275 test genes (6,482 variants), \textbf{zero gene overlap}. We also report random-split results for comparison.
 
 \subsection{Models}
 
-We benchmark 13 foundation models in two modalities:
-
-\paragraph{Protein Models (7 architectures, 11 scoring variants).}
-\begin{itemize}
-    \item \textbf{ESM-1b} (650M params) -- MLM + Cosine Similarity
-    \item \textbf{ESM-2} (3B params) -- MLM + Cosine Similarity
-    \item \textbf{ESM-1v} (650M params) -- MLM + Cosine Similarity
-    \item \textbf{ESM3} (1.4B params) -- MLM only
-    \item \textbf{ProtBERT} (350M params) -- MLM + Cosine Similarity
-    \item \textbf{ProtT5} (3B params) -- Cosine Similarity only (MLM at chance)
-    \item \textbf{Ankh} (500M params) -- Cosine Similarity only (MLM at chance)
-\end{itemize}
-
-\paragraph{Nucleotide Models (5 architectures, 9 scoring variants).}
-\begin{itemize}
-    \item \textbf{Nucleotide Transformer v2} (500M params) -- MLM + Cosine Similarity
-    \item \textbf{DNABERT-1} (117M params) -- MLM + Cosine Similarity
-    \item \textbf{DNABERT-2} (350M params) -- MLM + Cosine Similarity
-    \item \textbf{HyenaDNA} (1.6B params) -- Cosine Similarity only (MLM at chance)
-    \item \textbf{GenALM} (370M params) -- MLM + Cosine Similarity
-\end{itemize}
-
-\paragraph{External Baselines.}
-\begin{itemize}
-    \item \textbf{AlphaMissense} \cite{cheng2023alphamissense}: Population-frequency-enhanced predictions (216M precomputed scores)
-    \item \textbf{REVEL} \cite{ioannidis2016revel}: Ensemble of 13 individual predictors
-\end{itemize}
+We benchmark 12 foundation models: \textbf{Protein:} ESM-1b (650M), ESM-2 (3B), ESM-1v (650M), ESM3 (1.4B), ProtBERT (350M), ProtT5 (3B), Ankh (500M). \textbf{Nucleotide:} Nucleotide Transformer v2 (500M), DNABERT-1 (117M), DNABERT-2 (350M), HyenaDNA (1.6B), GenALM (370M). \textbf{External baselines:} AlphaMissense \cite{cheng2023alphamissense} and REVEL \cite{ioannidis2016revel}.
 
 \subsection{Scoring Paradigms}
 
-For each variant, we compute two types of scores from foundation models:
+\textbf{MLM Score:} $s_{\text{MLM}} = \log P(x_{\text{mut}} | x_{\text{context}}) - \log P(x_{\text{wt}} | x_{\text{context}})$. More negative = more deleterious.
 
-\paragraph{MLM Score.} The log-probability of the mutant amino acid (or nucleotide) at the variant position, normalized by the wild-type log-probability:
-\[
-s_{\text{MLM}} = \log P(x_{\text{mut}} | x_{\text{context}}) - \log P(x_{\text{wt}} | x_{\text{context}})
-\]
-More negative values indicate more deleterious variants. We use the negative as the pathogenicity score.
-
-\paragraph{Cosine Similarity.} The cosine similarity between the mutant and wild-type token embeddings at the variant position:
-\[
-s_{\text{cos}} = \frac{\mathbf{h}_{\text{mut}} \cdot \mathbf{h}_{\text{wt}}}{\|\mathbf{h}_{\text{mut}}\| \|\mathbf{h}_{\text{wt}}\|}
-\]
-Lower cosine similarity indicates greater predicted disruption.
+\textbf{Cosine Similarity:} $s_{\text{cos}} = \frac{\mathbf{h}_{\text{mut}} \cdot \mathbf{h}_{\text{wt}}}{\|\mathbf{h}_{\text{mut}}\| \|\mathbf{h}_{\text{wt}}\|}$. Lower = more disruptive.
 
 \subsection{Meta-Learner}
 
-We train an XGBoost meta-learner that takes 29 features as input:
-\begin{itemize}
-    \item 20 foundation model scores (5 protein MLM + 4 nucleotide MLM + 6 protein cosine + 5 nucleotide cosine)
-    \item 9 physicochemical features (Grantham distance, BLOSUM62 score, hydrophobicity change, charge change, protein length, position, etc.)
-\end{itemize}
+An XGBoost classifier takes 29 features: 20 foundation model scores (5 protein MLM + 4 nucleotide MLM + 6 protein cosine + 5 nucleotide cosine) and 9 physicochemical features (Grantham distance, BLOSUM62, hydrophobicity change, charge change, protein length, position, etc.). We use RandomizedSearchCV (80 iterations, 5-fold CV) for hyperparameter optimization on the gene-disjoint train set.
 
-We use 5-fold stratified cross-validation with RandomizedSearchCV (80 iterations) for hyperparameter optimization on the gene-disjoint train set. The model is evaluated on the gene-disjoint test set and on D2 as external temporal validation.
-
-\section{Experiments and Results}
+\section{Results}
 
 \subsection{Benchmark Results}
 
-Table \ref{tab:benchmark} presents the full benchmark results under gene-disjoint evaluation on D1, alongside D2 temporal validation results.
+Table~\ref{tab:benchmark} presents benchmark results under gene-disjoint and random-split evaluation.
 
 \begin{table}[h]
 \centering
-\caption{AUROC under gene-disjoint evaluation. D1 is the primary test set with 0\% gene overlap with training. D2 is temporal validation.}
+\caption{AUROC under gene-disjoint evaluation (D1) and temporal validation (D2).}
 \label{tab:benchmark}
 \small
 \begin{tabular}{lrrr}
 \toprule
 \textbf{Model} & \textbf{D1 Gene-Disjoint} & \textbf{D2 Temporal} & \textbf{D1 Random} \\
 \midrule
-REVEL & 0.9607 & 0.9732 & 0.9607 \\
-AlphaMissense & 0.9475 & 0.9517 & 0.9475 \\
+REVEL & 0.961 & 0.973 & 0.961 \\
+AlphaMissense & 0.948 & 0.952 & 0.948 \\
 \midrule
-ESM1b-MLM & 0.8821 & 0.9033 & 0.8860 \\
-ESM-1v-MLM & 0.8727 & 0.8881 & 0.8736 \\
-ProtBERT-MLM & 0.8570 & 0.8624 & 0.8482 \\
-ESM2-MLM & 0.8442 & 0.8640 & 0.8479 \\
-ESM3-MLM & 0.8333 & 0.8478 & 0.8297 \\
-ProtBERT-Cos & 0.7792 & 0.7722 & 0.7625 \\
-NT-v2-MLM & 0.6392 & 0.6101 & 0.6374 \\
+ESM1b-MLM & 0.882 & 0.903 & 0.886 \\
+ESM-1v-MLM & 0.873 & 0.888 & 0.874 \\
+ProtBERT-MLM & 0.857 & 0.862 & 0.848 \\
+ESM2-MLM & 0.844 & 0.864 & 0.848 \\
+ESM3-MLM & 0.833 & 0.848 & 0.830 \\
+ProtBERT-Cos & 0.779 & 0.772 & 0.763 \\
+NT-v2-MLM & 0.639 & 0.610 & 0.637 \\
 \midrule
-\multicolumn{4}{l}{\textit{T5-based models (ProtT5, Ankh, GenALM) at chance ($\approx$0.50)}} \\
-\multicolumn{4}{l}{\textit{All DNA models (DNABERT-1/2, HyenaDNA) at chance ($\approx$0.50)}} \\
+\multicolumn{4}{l}{\textit{ProtT5, Ankh, GenALM, DNABERT-1/2, HyenaDNA at chance ($\approx$0.50)}} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The best foundation model is ESM1b-MLM (D1 gene-disjoint: 0.882, D2: 0.903). Critically, the gene-disjoint evaluation has minimal impact on individual model performance (average drop $<$ 0.005), suggesting that existing models learn generalizable representations rather than gene-specific artifacts.
+The best foundation model is ESM1b-MLM (D1: 0.882, D2: 0.903). Gene-disjoint evaluation has minimal impact (average drop $<$ 0.005), suggesting models learn generalizable representations.
 
 \subsection{Gene-Disjoint vs Random Split}
 
-Table \ref{tab:split_comparison} directly compares random and gene-disjoint splits to quantify data leakage effects.
-
 \begin{table}[h]
 \centering
-\caption{Effect of evaluation protocol on meta-learner performance. Gene-disjoint ensures zero gene overlap between train and test.}
-\label{tab:split_comparison}
+\caption{Meta-learner performance under different evaluation protocols.}
+\label{tab:split}
 \small
 \begin{tabular}{lccccc}
 \toprule
-\textbf{Split} & \textbf{Train Genes} & \textbf{Test Genes} & \textbf{Overlap} & \textbf{AUROC} & \textbf{MCC} \\
+\textbf{Split} & \textbf{Train} & \textbf{Test} & \textbf{Overlap} & \textbf{AUROC} & \textbf{MCC} \\
 \midrule
-Random (80/20) & 5,097 & 1,274 & 83\% & 0.9378 & 0.7367 \\
-Gene-Disjoint & 5,096 & 1,275 & \textbf{0\%} & 0.9329 & 0.7233 \\
-\midrule
-D2 Temporal & --- & --- & --- & 0.9805 & --- \\
+Random (80/20) & 5,097 & 1,274 & 83\% & 0.938 & 0.737 \\
+Gene-Disjoint & 5,096 & 1,275 & \textbf{0\%} & 0.933 & 0.723 \\
+D2 Temporal & --- & --- & --- & 0.981 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The meta-learner shows only a 0.005 AUROC drop when moving from random to gene-disjoint evaluation. This small gap indicates that the foundation model features generalize well across genes, and that previous random-split evaluations were not significantly inflated by data leakage.
+The 0.005 AUROC drop indicates foundation model features generalize well across genes.
 
-\subsection{Model Agreement Analysis}
+\subsection{Model Agreement}
 
-Figure \ref{fig:correlation} shows the pairwise Spearman correlation heatmap across all 22 model scores.
+Figure~\ref{fig:cka_cross} shows pairwise Spearman correlation across all model scores.
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig1_correlation_heatmap.png}
-    \caption{Pairwise Spearman correlation between all model scores on D1. Protein MLM models (upper-left cluster) are highly correlated ($r = 0.68$--$0.83$). Nucleotide models are nearly orthogonal to protein models ($r \approx 0.00$).}
+    \includegraphics[width=0.7\textwidth]{figures/fig1_correlation_heatmap.png}
+    \caption{Pairwise Spearman correlation. Protein MLM models are highly correlated ($r = 0.68$--$0.83$). Nucleotide models are nearly orthogonal to protein models ($r \approx 0.00$).}
     \label{fig:correlation}
 \end{figure}
 
-Key findings:
-\begin{itemize}
-    \item \textbf{Intra-Protein MLM:} $r = 0.393 \pm 0.366$ (highly correlated)
-    \item \textbf{Intra-Nucleotide MLM:} $r = 0.071 \pm 0.065$ (weakly correlated)
-    \item \textbf{Cross-modality:} $r = 0.059 \pm 0.120$ (nearly orthogonal)
-\end{itemize}
+Key findings: intra-protein MLM $r = 0.393 \pm 0.366$, intra-nucleotide MLM $r = 0.071 \pm 0.065$, cross-modality $r = 0.059 \pm 0.120$.
 
-The orthogonality between protein and nucleotide models means they capture fundamentally different information about variants. This is the key insight motivating multi-modal fusion.
-
-\subsection{What Makes Variants Hard?}
-
-We stratify variants by cross-modal disagreement (standard deviation of model predictions) into five difficulty bins.
+\subsection{Variant Difficulty and Biological Correlates}
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig2_difficulty_spectrum.png}
-    \caption{Model performance across the variant difficulty spectrum (D1). Variants with high cross-modal disagreement are harder for all models. Nucleotide models show the most dramatic degradation.}
+    \includegraphics[width=0.7\textwidth]{figures/fig2_difficulty_spectrum.png}
+    \caption{Performance across the variant difficulty spectrum. Models degrade on variants with high cross-modal disagreement.}
     \label{fig:difficulty}
 \end{figure}
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig3_biological_correlates.png}
-    \caption{Biological correlates of cross-modal disagreement. BLOSUM62 score (negative correlation) and Grantham distance (positive correlation) are the strongest correlates, followed by cysteine changes.}
+    \includegraphics[width=0.7\textwidth]{figures/fig3_biological_correlates.png}
+    \caption{Biological correlates of cross-modal disagreement.}
     \label{fig:biology}
 \end{figure}
 
-Biological correlates of variant difficulty:
-\begin{itemize}
-    \item \textbf{BLOSUM62:} $r = -0.181$ (substitution conservativeness)
-    \item \textbf{Grantham distance:} $r = 0.180$ (amino acid dissimilarity)
-    \item \textbf{Cysteine changes:} $r = 0.142$ (disulfide bond disruption)
-    \item \textbf{Protein length:} $r = -0.110$ (longer proteins have harder variants)
-\end{itemize}
+BLOSUM62 ($r = -0.181$), Grantham distance ($r = 0.180$), cysteine changes ($r = 0.142$), and protein length ($r = -0.110$) are the strongest correlates of variant difficulty.
 
-These findings suggest that variants causing extreme physicochemical changes or disrupting structural elements (cysteine-mediated disulfide bonds) are hardest for current foundation models to classify consistently.
-
-\subsection{Multi-Modal Fusion Ablation}
-
-Table \ref{tab:ablation} presents ablation results showing the marginal contribution of each model class.
+\subsection{Fusion Ablation}
 
 \begin{table}[h]
 \centering
-\caption{Fusion ablation study under gene-disjoint evaluation. Each row adds a model class to the feature set.}
+\caption{Fusion ablation under gene-disjoint evaluation.}
 \label{tab:ablation}
 \small
 \begin{tabular}{lrrr}
 \toprule
-\textbf{Configuration} & \textbf{N features} & \textbf{AUROC} & \textbf{MCC} \\
+\textbf{Configuration} & \textbf{N feat.} & \textbf{AUROC} & \textbf{MCC} \\
 \midrule
 Best Single (ESM1b-MLM) & 1 & 0.881 & 0.608 \\
 Protein MLM Only & 5 & 0.910 & 0.665 \\
-Protein Cosine Only & 6 & 0.871 & 0.575 \\
 All Protein (MLM+Cos) & 11 & 0.924 & 0.698 \\
 Nucleotide MLM Only & 4 & 0.650 & 0.201 \\
-Nucleotide Cosine Only & 5 & 0.622 & 0.172 \\
 All Nucleotide (MLM+Cos) & 9 & 0.699 & 0.280 \\
 \midrule
 All Foundation Models & 20 & 0.928 & 0.707 \\
@@ -281,126 +186,75 @@ Meta-Learner (Ours) & 29 & \textbf{0.933} & \textbf{0.723} \\
 \end{tabular}
 \end{table}
 
-Key observations:
-\begin{itemize}
-    \item \textbf{Meta-Learner} (AUROC 0.933) approaches AlphaMissense (0.948) using only zero-shot scores, without population frequency data.
-    \item Adding nucleotide models provides marginal gains (+0.004) over protein-only fusion (0.924 $\to$ 0.928), confirming the orthogonality finding while reflecting limited signal in nucleotide representations for missense variants.
-    \item The physicochemical features (Grantham, BLOSUM62, etc.) contribute non-trivially (+0.003), indicating that simple biochemical priors complement learned representations.
-\end{itemize}
+The meta-learner (0.933) approaches AlphaMissense (0.948) without population frequency data. Adding nucleotide models yields marginal gains (+0.004), confirming orthogonality.
 
-\subsection{Temporal Validation}
+\subsection{Representation Geometry: CKA}
 
-D2 uses variants from a later ClinVar release (January 2025) while sharing all 2,569 genes with D1. Figure \ref{fig:temporal} shows temporal validation results.
+We analyze internal representations using Centered Kernel Alignment (CKA) \cite{kornblith2019similarity} with an RBF kernel (median heuristic for bandwidth).
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.85\textwidth]{figures/temporal_validation.png}
-    \caption{Temporal validation: D1 vs D2 performance on shared genes. Foundation models show small temporal gaps ($<$0.015), with most performing slightly better on D2. The meta-learner achieves 0.981 on D2 temporal test.}
-    \label{fig:temporal}
-\end{figure}
-
-All foundation models show temporal gaps $<$ 0.015, demonstrating generalization across ClinVar releases. The meta-learner achieves 0.981 on D2, suggesting strong generalization to temporally distinct data.
-
-\subsection{Feature Importance}
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig6_feature_importance.png}
-    \caption{Top 20 feature importances from the gene-disjoint meta-learner. \texttt{mlm\_mean} (0.335) and \texttt{mlm\_std} (0.131) dominate, followed by ESM1b-MLM (0.061) and BLOSUM62 (0.050).}
-    \label{fig:importance}
-\end{figure}
-
-The meta-learner relies heavily on aggregate MLM statistics (\texttt{mlm\_mean}, \texttt{mlm\_std}) rather than individual model scores. This suggests that the ensemble captures consensus signal across protein models, with physicochemical features providing additional discrimination.
-
-\subsection{Representation Geometry: Centered Kernel Alignment}
-
-To understand \emph{why} protein and nucleotide models behave differently, we analyze their internal representations using Centered Kernel Alignment (CKA) \cite{kornblith2019similarity}. CKA measures the similarity between two sets of representations, with values in $[0, 1]$ where 1 indicates identical representational geometry. We use an RBF kernel with the \textbf{median heuristic} for bandwidth selection ($\gamma = 1 / (2 \cdot \text{median}(\|x_i - x_j\|^2))$), which is the standard practice in kernel methods \cite{kornblith2019similarity}. We note that the alternative $\gamma = 1/d$ formula (where $d$ is the embedding dimension) can produce misleadingly inflated CKA values for cross-modal comparisons when embedding dimensions differ, because the kernel bandwidth becomes incorrectly scaled relative to the actual pairwise distances.
-
-\paragraph{Cross-Model CKA.} Figure \ref{fig:cka_cross} shows the full $11 \times 11$ CKA matrix across all foundation models using [CLS] token representations, computed with the standard median heuristic for RBF kernel bandwidth \cite{kornblith2019similarity}.
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig_cka_cross_model.png}
-    \caption{Cross-model CKA similarity matrix (median-heuristic RBF kernel). Protein models form a high-similarity cluster (upper-left), while nucleotide models are nearly orthogonal. Cross-modality CKA never exceeds 0.104.}
+    \includegraphics[width=0.7\textwidth]{figures/fig_cka_cross_model.png}
+    \caption{Cross-model CKA (median-heuristic RBF). Protein models cluster (upper-left); cross-modality CKA $<$ 0.104.}
     \label{fig:cka_cross}
 \end{figure}
 
-Key observations:
-\begin{itemize}
-    \item \textbf{Protein intra-cluster:} ESM1b--ESM-1v CKA = 0.772, ESM1b--ProtBERT = 0.638, ProtT5--Ankh = 0.671. These T5-based models share encoder-decoder architecture and learn similar representations.
-    \item \textbf{Cross-modality:} Protein--nucleotide CKA ranges from 0.005 to 0.104 (mean 0.044), confirming that the two modalities learn fundamentally different representations.
-    \item \textbf{Nucleotide intra-cluster:} Weak similarity (mean CKA = 0.047), suggesting nucleotide models learn highly divergent representations from each other.
-\end{itemize}
-
-\paragraph{Layer-wise CKA (ESM1b vs ESM2).} Figure \ref{fig:cka_layerwise} compares intermediate layers of two related protein models.
+Key CKA values: ESM1b--ESM-1v = 0.772, ESM1b--ProtBERT = 0.638, ProtT5--Ankh = 0.671. Cross-modality mean = 0.044 (range 0.005--0.104). Nucleotide intra-cluster mean = 0.047.
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig_cka_layerwise_heatmap.png}
-    \caption{Layer-wise CKA between ESM1b and ESM2. Middle-to-late layers (L18--L30) show near-perfect alignment (CKA $>$ 0.99), while early and final layers diverge. This suggests both models learn a shared representation space in their intermediate layers.}
-    \label{fig:cka_layerwise}
-\end{figure}
-
-ESM1b and ESM2 show moderate CKA in their final layers (L33: 0.598) but lower similarity in middle layers (L18: 0.548, L12: 0.294). The layer-to-final CKA shows both models' intermediate layers are moderately similar to their own final layer (ESM1b L18: 0.506, ESM2 L18: 0.539), indicating gradual representation evolution rather than abrupt transition.
-
-\paragraph{Pathogenic vs Benign CKA.} Figure \ref{fig:cka_pathben} reveals whether models encode variant pathogenicity within their representation geometry.
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig_pathogenic_benign_cka.png}
-    \caption{CKA between pathogenic and benign variant representations. All models show near-zero CKA ($<$ 0.025), indicating that pathogenic and benign variants occupy fundamentally different regions of every model's representation space---all models learn discriminative representations for pathogenicity.}
+    \includegraphics[width=0.7\textwidth]{figures/fig_pathogenic_benign_cka.png}
+    \caption{CKA between pathogenic and benign representations. All models show CKA $<$ 0.025, indicating pathogenicity is encoded through geometric reorganization.}
     \label{fig:cka_pathben}
 \end{figure}
 
-All models show CKA $<$ 0.025 between pathogenic and benign representations, indicating that pathogenic and benign variants occupy fundamentally different regions of the representation space across every architecture. This is consistent with all models learning discriminative representations for pathogenicity through geometric reorganization rather than magnitude changes alone.
+All models show CKA $<$ 0.025 between pathogenic and benign variants, indicating discriminative representations via geometric reorganization rather than magnitude changes.
+
+\begin{figure}[h]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/fig_cka_layerwise_heatmap.png}
+        \caption{Layer-wise CKA (ESM1b vs ESM2)}
+        \label{fig:cka_layerwise}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/fig_layerwise_probing.png}
+        \caption{Layer-wise pathogenicity probing}
+        \label{fig:layerwise_probing}
+    \end{subfigure}
+    \caption{Left: Layer-wise CKA between ESM1b and ESM2 (final-layer CKA = 0.598). Right: Pathogenicity probing accuracy increases monotonically from L1 ($\approx$0.72) to L33 ($\approx$0.81).}
+    \label{fig:layerwise}
+\end{figure}
 
 \subsection{Linear Probing}
 
-To quantify what information is accessible from each model's representations, we train linear probes on three tasks using frozen [CLS] token embeddings (Figure \ref{fig:probing}).
-
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig_probing_tasks.png}
-    \caption{Linear probing results across three tasks. Protein models consistently outperform nucleotide models on pathogenicity prediction (top). Ankh achieves the highest AA type probing accuracy (0.968), while nucleotide models struggle (0.27--0.48), confirming they do not encode amino acid identity.}
+    \includegraphics[width=0.7\textwidth]{figures/fig_probing_tasks.png}
+    \caption{Linear probing on three tasks. Protein models outperform nucleotide models on pathogenicity. Ankh achieves 0.968 accuracy on AA type.}
     \label{fig:probing}
 \end{figure}
 
-\paragraph{Pathogenicity.} Protein models achieve 0.796--0.818 AUROC, with Ankh leading (0.818). Nucleotide models range from 0.519 (HyenaDNA) to 0.696 (NT-v2), with DNABERT-2 and GenaLM near chance ($\approx$0.60). This confirms that pathogenicity signal is primarily encoded in protein representations.
-
-\paragraph{Amino Acid Type.} Ankh achieves 0.968 accuracy, followed by ESM2 (0.909) and ESM3 (0.849). Nucleotide models score 0.27--0.48 (chance = 0.05 for 20 amino acids), confirming they do not explicitly encode amino acid identity despite operating on codon-level inputs.
-
-\paragraph{BLOSUM62.} All models show near-zero $R^2$ ($<$ 0.05), indicating that evolutionary substitution scores are not directly linearly decodable from a single [CLS] token. This is expected, as BLOSUM62 captures pairwise substitution frequencies that require compositional analysis across residues.
-
-\paragraph{Layer-wise Probing.} Figure \ref{fig:layerwise_probing} shows pathogenicity probing accuracy across layers for ESM1b and ESM2.
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig_layerwise_probing.png}
-    \caption{Layer-wise pathogenicity probing accuracy. Both models show monotonically increasing accuracy from early to late layers, with ESM1b peaking at layer 33 (0.810) and ESM2 at layer 33 (0.815). This confirms pathogenicity information is progressively accumulated across layers.}
-    \label{fig:layerwise_probing}
-\end{figure}
-
-Both ESM1b and ESM2 show monotonic improvement from early (L1: $\approx$0.72) to final layers (L33: $\approx$0.81), confirming that pathogenicity-relevant information is progressively accumulated across the network depth.
+Protein models achieve 0.80--0.82 pathogenicity AUROC; nucleotide models range from 0.52--0.70. On AA type, Ankh reaches 0.968, while nucleotide models score 0.27--0.48 (vs. chance 0.05), confirming they do not encode amino acid identity.
 
 \section{Discussion}
 
-\paragraph{Protein models dominate.} ESM1b-MLM achieves 0.882 AUROC under gene-disjoint evaluation, far exceeding the best nucleotide model (NT-v2 at 0.639). The protein language modeling objective appears fundamentally better aligned with pathogenicity prediction, likely because pathogenicity is primarily determined at the protein level.
+\paragraph{Protein models dominate.} ESM1b-MLM (AUROC 0.882) far exceeds the best nucleotide model (NT-v2 at 0.639). Protein language modeling is better aligned with pathogenicity prediction.
 
-\paragraph{Orthogonality enables fusion.} The near-zero correlation between protein and nucleotide models ($r \approx 0.00$) and low CKA (mean 0.044) means they capture complementary variant effects. Nucleotide models may capture local sequence context (splice signals, regulatory elements) that protein models miss, though this signal appears limited for missense variants.
+\paragraph{Orthogonality enables fusion.} Low cross-modality correlation ($r \approx 0.00$) and CKA (mean 0.044) indicate complementary variant information. However, the marginal fusion gain (+0.004) suggests nucleotide signal is limited for missense variants.
 
-\paragraph{Pathogenicity as geometric reorganization.} All models show CKA $<$ 0.025 between pathogenic and benign representations (Figure \ref{fig:cka_pathben}), indicating that pathogenicity is encoded through fundamental geometric reorganization of the representation space---pathogenic and benign variants cluster in distinct regions---rather than through simple magnitude scaling.
+\paragraph{Pathogenicity as geometric reorganization.} All models show CKA $<$ 0.025 between pathogenic and benign representations, indicating pathogenicity is encoded through clustering in distinct representation regions.
 
-\paragraph{Layer-wise information accumulation.} Linear probing reveals that pathogenicity information accumulates monotonically across layers (L1: $\approx$0.72, L33: $\approx$0.81 for both ESM1b and ESM2). The layer-wise CKA between ESM1b and ESM2 shows moderate similarity throughout (L33: 0.598), with both models' intermediate layers progressively approaching their own final representations.
+\paragraph{Layer-wise accumulation.} Pathogenicity probing improves monotonically from L1 ($\approx$0.72) to L33 ($\approx$0.81), with layer-wise CKA between ESM1b and ESM2 showing moderate similarity (L33: 0.598).
 
-\paragraph{Gene-disjoint evaluation is critical.} Our gene-disjoint protocol provides a more honest assessment of generalization. The small performance drop (0.005 AUROC) between random and gene-disjoint splits suggests that current foundation models do learn genuine biological representations rather than gene-specific artifacts.
-
-\paragraph{Zero-shot approaches are competitive.} Foundation + Physicochemical features (AUROC 0.933) approach AlphaMissense (0.948) without population frequency data. This suggests that the protein language model signal, combined with simple physicochemical features, captures most of the pathogenicity-relevant information.
-
-\paragraph{Limitations.} (1) D2 genes are a subset of D1 genes, limiting the generality of temporal validation. (2) T5-based models fail at MLM scoring but may provide useful representations through other mechanisms. (3) We do not evaluate on indels or synonymous variants. (4) The gene-disjoint protocol may underestimate performance in clinical settings where gene-level information is available.
+\paragraph{Limitations.} (1) D2 genes are a subset of D1 genes; temporal validation tests the same genes at a different time point rather than truly unseen genes. (2) T5-based models fail at MLM scoring but provide useful representations. (3) We evaluate only on missense variants. (4) The gene-disjoint protocol may underestimate clinical performance where gene-level information is available.
 
 \section{Conclusion}
 
-We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models for variant pathogenicity prediction under gene-disjoint evaluation, combined with a systematic representation analysis via CKA and linear probing. Our key findings are: (1) protein MLM models capture a shared high-performance signal, (2) nucleotide models are orthogonal to protein models (mean CKA = 0.044) and provide complementary information, (3) all models encode pathogenicity through geometric reorganization of representations (pathogenic-vs-benign CKA $<$ 0.025), (4) pathogenicity information accumulates monotonically across layers, and (5) a lightweight fusion of foundation model scores approaches specialized tools without population frequency data. These results provide a roadmap for combining multi-modal biological representations for variant effect prediction, and establish gene-disjoint evaluation as the standard for future benchmarks.
+We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation, with representation analysis via CKA and linear probing. Protein MLM models capture a shared high-performance signal; nucleotide models are orthogonal (mean CKA = 0.044) but provide limited additional signal for missense variants. All models encode pathogenicity through geometric reorganization. A lightweight meta-learner (AUROC 0.933) approaches AlphaMissense without population frequency data.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
