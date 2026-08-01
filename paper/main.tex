@@ -27,7 +27,7 @@
 \maketitle
 
 \begin{abstract}
-Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 9 protein and 4 nucleotide foundation models on 29,595 ClinVar missense variants, using two scoring paradigms (masked language model probability and cosine similarity), and compare against AlphaMissense and REVEL. We further analyze model representations using Centered Kernel Alignment (CKA) and linear probing across 11 architectures. To avoid data leakage, we evaluate exclusively under a \textbf{gene-disjoint} protocol where no gene appears in both training and test sets. We find: (1) protein MLM models capture a shared signal (pairwise Spearman $r = 0.68$--$0.83$) while nucleotide models are nearly orthogonal ($r \approx 0.00$) to protein models; (2) CKA analysis confirms cross-modality orthogonality (mean CKA = 0.045) while revealing unexpected similarity between ESM3 and GenaLM (CKA = 0.957); (3) linear probing shows pathogenicity information accumulates monotonically across layers; (4) a lightweight XGBoost meta-learner fusing 20 foundation model scores with 9 physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data; (5) model disagreement patterns correlate with biologically meaningful properties (BLOSUM62 $r = -0.181$, Grantham $r = 0.180$). These results establish that protein language models capture most pathogenicity-relevant signal, and that nucleotide models provide genuinely complementary information---a finding with implications for multi-modal biological representation learning.
+Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 9 protein and 4 nucleotide foundation models on 29,595 ClinVar missense variants, using two scoring paradigms (masked language model probability and cosine similarity), and compare against AlphaMissense and REVEL. We further analyze model representations using Centered Kernel Alignment (CKA) and linear probing across 11 architectures. To avoid data leakage, we evaluate exclusively under a \textbf{gene-disjoint} protocol where no gene appears in both training and test sets. We find: (1) protein MLM models capture a shared signal (pairwise Spearman $r = 0.68$--$0.83$) while nucleotide models are nearly orthogonal ($r \approx 0.00$) to protein models; (2) CKA analysis confirms cross-modality orthogonality (mean CKA = 0.044), with protein models forming a high-similarity cluster (ESM1b--ESM-1v: 0.772) and nucleotide models showing weak mutual similarity (mean 0.047); (3) linear probing shows pathogenicity information accumulates monotonically across layers; (4) a lightweight XGBoost meta-learner fusing 20 foundation model scores with 9 physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data; (5) model disagreement patterns correlate with biologically meaningful properties (BLOSUM62 $r = -0.181$, Grantham $r = 0.180$). These results establish that protein language models capture most pathogenicity-relevant signal, and that nucleotide models provide genuinely complementary information---a finding with implications for multi-modal biological representation learning.
 \end{abstract}
 
 \section{Introduction}
@@ -49,7 +49,7 @@ We address these gaps by systematically benchmarking 13 foundation models (9 pro
 \textbf{Contributions:}
 \begin{enumerate}
     \item The first controlled benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation on the same variants.
-    \item Representation analysis via CKA revealing that protein and nucleotide models capture nearly orthogonal information (mean CKA = 0.045), while ESM3 and GenaLM share unexpectedly high representational similarity (CKA = 0.957).
+    \item Representation analysis via CKA confirming that protein and nucleotide models capture nearly orthogonal information (mean cross-modality CKA = 0.044), with protein models forming a high-similarity cluster (ESM1b--ESM-1v: 0.772) and all models encoding pathogenicity through geometric reorganization of representations (pathogenic-vs-benign CKA $<$ 0.025).
     \item Linear probing demonstrating that pathogenicity information accumulates monotonically across layers, with protein models encoding pathogenicity as a geometric reorganization of representations.
     \item A lightweight meta-learner (AUROC 0.933 gene-disjoint) that approaches AlphaMissense without population frequency data.
     \item Analysis of what makes variants hard: cross-modal disagreement correlates with BLOSUM62, Grantham distance, and cysteine changes.
@@ -314,23 +314,22 @@ The meta-learner relies heavily on aggregate MLM statistics (\texttt{mlm\_mean},
 
 \subsection{Representation Geometry: Centered Kernel Alignment}
 
-To understand \emph{why} protein and nucleotide models behave differently, we analyze their internal representations using Centered Kernel Alignment (CKA) \cite{kornblith2019similarity}. CKA measures the similarity between two sets of representations, with values in $[0, 1]$ where 1 indicates identical representational geometry.
+To understand \emph{why} protein and nucleotide models behave differently, we analyze their internal representations using Centered Kernel Alignment (CKA) \cite{kornblith2019similarity}. CKA measures the similarity between two sets of representations, with values in $[0, 1]$ where 1 indicates identical representational geometry. We use an RBF kernel with the \textbf{median heuristic} for bandwidth selection ($\gamma = 1 / (2 \cdot \text{median}(\|x_i - x_j\|^2))$), which is the standard practice in kernel methods \cite{kornblith2019similarity}. We note that the alternative $\gamma = 1/d$ formula (where $d$ is the embedding dimension) can produce misleadingly inflated CKA values for cross-modal comparisons when embedding dimensions differ, because the kernel bandwidth becomes incorrectly scaled relative to the actual pairwise distances.
 
-\paragraph{Cross-Model CKA.} Figure \ref{fig:cka_cross} shows the full $11 \times 11$ CKA matrix across all foundation models using [CLS] token representations.
+\paragraph{Cross-Model CKA.} Figure \ref{fig:cka_cross} shows the full $11 \times 11$ CKA matrix across all foundation models using [CLS] token representations, computed with the standard median heuristic for RBF kernel bandwidth \cite{kornblith2019similarity}.
 
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.85\textwidth]{figures/fig_cka_cross_model.png}
-    \caption{Cross-model CKA similarity matrix. Protein models form a high-similarity cluster (upper-left), while nucleotide models are nearly orthogonal. Notably, ESM3 and GenaLM show CKA = 0.957 despite different architectures and training data.}
+    \caption{Cross-model CKA similarity matrix (median-heuristic RBF kernel). Protein models form a high-similarity cluster (upper-left), while nucleotide models are nearly orthogonal. Cross-modality CKA never exceeds 0.104.}
     \label{fig:cka_cross}
 \end{figure}
 
 Key observations:
 \begin{itemize}
-    \item \textbf{Protein intra-cluster:} ESM1b--ESM-1v CKA = 0.757, ESM1b--ProtBERT = 0.625, ProtT5--Ankh = 0.667. These T5-based models share encoder-decoder architecture and learn similar representations.
-    \item \textbf{ESM3 $\approx$ GenaLM:} CKA = 0.957 --- the highest cross-architecture similarity, suggesting ESM3's protein representations and GenaLM's nucleotide representations capture similar geometric structure despite operating on different modalities.
-    \item \textbf{Cross-modality:} Protein--nucleotide CKA ranges from 0.008 to 0.103 (mean 0.045), confirming that the two modalities learn fundamentally different representations.
-    \item \textbf{Nucleotide intra-cluster:} Weak similarity (mean CKA = 0.037), suggesting nucleotide models learn highly divergent representations.
+    \item \textbf{Protein intra-cluster:} ESM1b--ESM-1v CKA = 0.772, ESM1b--ProtBERT = 0.638, ProtT5--Ankh = 0.671. These T5-based models share encoder-decoder architecture and learn similar representations.
+    \item \textbf{Cross-modality:} Protein--nucleotide CKA ranges from 0.005 to 0.104 (mean 0.044), confirming that the two modalities learn fundamentally different representations.
+    \item \textbf{Nucleotide intra-cluster:} Weak similarity (mean CKA = 0.047), suggesting nucleotide models learn highly divergent representations from each other.
 \end{itemize}
 
 \paragraph{Layer-wise CKA (ESM1b vs ESM2).} Figure \ref{fig:cka_layerwise} compares intermediate layers of two related protein models.
@@ -342,18 +341,18 @@ Key observations:
     \label{fig:cka_layerwise}
 \end{figure}
 
-ESM1b and ESM2 share high CKA in middle-to-late layers (L18--L30: CKA $>$ 0.99) but diverge at the embedding layer (L1: 0.583) and final layer (L33: 0.562). This U-shaped pattern indicates that both models converge to a shared representational geometry in their intermediate processing, with task-specific specialization at the input and output.
+ESM1b and ESM2 show moderate CKA in their final layers (L33: 0.598) but lower similarity in middle layers (L18: 0.548, L12: 0.294). The layer-to-final CKA shows both models' intermediate layers are moderately similar to their own final layer (ESM1b L18: 0.506, ESM2 L18: 0.539), indicating gradual representation evolution rather than abrupt transition.
 
 \paragraph{Pathogenic vs Benign CKA.} Figure \ref{fig:cka_pathben} reveals whether models encode variant pathogenicity within their representation geometry.
 
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.85\textwidth]{figures/fig_pathogenic_benign_cka.png}
-    \caption{CKA between pathogenic and benign variant representations. ESM3 and GenaLM maintain high representational similarity across classes (CKA $>$ 0.85), while most other models show near-zero similarity, indicating they fundamentally reorganize representations based on pathogenicity.}
+    \caption{CKA between pathogenic and benign variant representations. All models show near-zero CKA ($<$ 0.025), indicating that pathogenic and benign variants occupy fundamentally different regions of every model's representation space---all models learn discriminative representations for pathogenicity.}
     \label{fig:cka_pathben}
 \end{figure}
 
-Most models show CKA $<$ 0.02 between pathogenic and benign representations, indicating that pathogenic and benign variants occupy fundamentally different regions of the representation space. This is consistent with these models learning discriminative representations for pathogenicity. In contrast, ESM3 (CKA = 0.858) and GenaLM (CKA = 0.864) maintain nearly identical representational geometry across classes, suggesting they encode pathogenicity through magnitude or direction changes rather than geometric reorganization.
+All models show CKA $<$ 0.025 between pathogenic and benign representations, indicating that pathogenic and benign variants occupy fundamentally different regions of the representation space across every architecture. This is consistent with all models learning discriminative representations for pathogenicity through geometric reorganization rather than magnitude changes alone.
 
 \subsection{Linear Probing}
 
@@ -387,11 +386,11 @@ Both ESM1b and ESM2 show monotonic improvement from early (L1: $\approx$0.72) to
 
 \paragraph{Protein models dominate.} ESM1b-MLM achieves 0.882 AUROC under gene-disjoint evaluation, far exceeding the best nucleotide model (NT-v2 at 0.639). The protein language modeling objective appears fundamentally better aligned with pathogenicity prediction, likely because pathogenicity is primarily determined at the protein level.
 
-\paragraph{Orthogonality enables fusion.} The near-zero correlation between protein and nucleotide models ($r \approx 0.00$) and low CKA (mean 0.045) means they capture complementary variant effects. Nucleotide models may capture local sequence context (splice signals, regulatory elements) that protein models miss, though this signal appears limited for missense variants.
+\paragraph{Orthogonality enables fusion.} The near-zero correlation between protein and nucleotide models ($r \approx 0.00$) and low CKA (mean 0.044) means they capture complementary variant effects. Nucleotide models may capture local sequence context (splice signals, regulatory elements) that protein models miss, though this signal appears limited for missense variants.
 
-\paragraph{ESM3 and GenaLM: convergent representations.} The unexpectedly high CKA between ESM3 (protein) and GenaLM (nucleotide) (0.957) is striking. Both models show high pathogenic-vs-benign CKA (0.858 and 0.864 respectively), suggesting they encode pathogenicity through magnitude changes rather than geometric reorganization --- a fundamentally different representational strategy from other models.
+\paragraph{Pathogenicity as geometric reorganization.} All models show CKA $<$ 0.025 between pathogenic and benign representations (Figure \ref{fig:cka_pathben}), indicating that pathogenicity is encoded through fundamental geometric reorganization of the representation space---pathogenic and benign variants cluster in distinct regions---rather than through simple magnitude scaling.
 
-\paragraph{Layer-wise information accumulation.} Linear probing reveals that pathogenicity information accumulates monotonically across layers (L1: $\approx$0.72, L33: $\approx$0.81 for both ESM1b and ESM2). The layer-wise CKA between ESM1b and ESM2 shows a U-shaped pattern: high similarity in early layers, peak divergence in middle layers, and convergence in late layers, suggesting shared early processing followed by model-specific intermediate computation.
+\paragraph{Layer-wise information accumulation.} Linear probing reveals that pathogenicity information accumulates monotonically across layers (L1: $\approx$0.72, L33: $\approx$0.81 for both ESM1b and ESM2). The layer-wise CKA between ESM1b and ESM2 shows moderate similarity throughout (L33: 0.598), with both models' intermediate layers progressively approaching their own final representations.
 
 \paragraph{Gene-disjoint evaluation is critical.} Our gene-disjoint protocol provides a more honest assessment of generalization. The small performance drop (0.005 AUROC) between random and gene-disjoint splits suggests that current foundation models do learn genuine biological representations rather than gene-specific artifacts.
 
@@ -401,7 +400,7 @@ Both ESM1b and ESM2 show monotonic improvement from early (L1: $\approx$0.72) to
 
 \section{Conclusion}
 
-We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models for variant pathogenicity prediction under gene-disjoint evaluation, combined with a systematic representation analysis via CKA and linear probing. Our key findings are: (1) protein MLM models capture a shared high-performance signal, (2) nucleotide models are orthogonal to protein models (mean CKA = 0.045) and provide complementary information, (3) ESM3 and GenaLM share unexpectedly high representational similarity (CKA = 0.957) despite different modalities, (4) pathogenicity information accumulates monotonically across layers, with most models encoding pathogenicity as a geometric reorganization of representations, and (5) a lightweight fusion of foundation model scores approaches specialized tools without population frequency data. These results provide a roadmap for combining multi-modal biological representations for variant effect prediction, and establish gene-disjoint evaluation as the standard for future benchmarks.
+We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models for variant pathogenicity prediction under gene-disjoint evaluation, combined with a systematic representation analysis via CKA and linear probing. Our key findings are: (1) protein MLM models capture a shared high-performance signal, (2) nucleotide models are orthogonal to protein models (mean CKA = 0.044) and provide complementary information, (3) all models encode pathogenicity through geometric reorganization of representations (pathogenic-vs-benign CKA $<$ 0.025), (4) pathogenicity information accumulates monotonically across layers, and (5) a lightweight fusion of foundation model scores approaches specialized tools without population frequency data. These results provide a roadmap for combining multi-modal biological representations for variant effect prediction, and establish gene-disjoint evaluation as the standard for future benchmarks.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
