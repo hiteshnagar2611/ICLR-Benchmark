@@ -1,0 +1,24 @@
+# LaTeX intermediate files
+*.aux
+*.log
+*.bbl
+*.blg
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+
+# PBS output files
+*.o*
+*.e*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Large data files
+*.tsv.gz
+*.npz
+
+# OS files
+.DS_Store

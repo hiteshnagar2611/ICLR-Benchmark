@@ -1,0 +1,245 @@
+{
+  "dataset": "d2",
+  "n_variants": 9627,
+  "n_genes": 2569,
+  "n_models": 22,
+  "benchmark_table": [
+    {
+      "Model": "REVEL",
+      "AUROC": 0.9732316770715804,
+      "AUPRC": 0.9615196477230065,
+      "N_valid": 9541
+    },
+    {
+      "Model": "AlphaMissense",
+      "AUROC": 0.9517464071311623,
+      "AUPRC": 0.9374188198200608,
+      "N_valid": 8938
+    },
+    {
+      "Model": "esm1b_mlm",
+      "AUROC": 0.9033458268990797,
+      "AUPRC": 0.8744652735927465,
+      "N_valid": 9627
+    },
+    {
+      "Model": "esm1v_mlm",
+      "AUROC": 0.8881328038947237,
+      "AUPRC": 0.8617825637058603,
+      "N_valid": 9627
+    },
+    {
+      "Model": "esm2_mlm",
+      "AUROC": 0.8639687330069469,
+      "AUPRC": 0.8293787718636041,
+      "N_valid": 9627
+    },
+    {
+      "Model": "protbert_mlm",
+      "AUROC": 0.8624268919849143,
+      "AUPRC": 0.8455969977839449,
+      "N_valid": 9627
+    },
+    {
+      "Model": "esm3_mlm",
+      "AUROC": 0.8479261148993269,
+      "AUPRC": 0.8317450774777393,
+      "N_valid": 9617
+    },
+    {
+      "Model": "protbert_cos",
+      "AUROC": 0.7722266776170592,
+      "AUPRC": 0.7366096496475646,
+      "N_valid": 9627
+    },
+    {
+      "Model": "ntv2_mlm",
+      "AUROC": 0.6100558400791511,
+      "AUPRC": 0.5487729415232863,
+      "N_valid": 9626
+    },
+    {
+      "Model": "ntv2_cos",
+      "AUROC": 0.6039072066485467,
+      "AUPRC": 0.533909302407231,
+      "N_valid": 9627
+    },
+    {
+      "Model": "esm1b_cos",
+      "AUROC": 0.5993777090659103,
+      "AUPRC": 0.43610521926912116,
+      "N_valid": 9627
+    },
+    {
+      "Model": "prott5_cos",
+      "AUROC": 0.5448179242779454,
+      "AUPRC": 0.4149735050817954,
+      "N_valid": 9627
+    },
+    {
+      "Model": "ankh_cos",
+      "AUROC": 0.5322622050252962,
+      "AUPRC": 0.43343512401354783,
+      "N_valid": 9627
+    },
+    {
+      "Model": "esm1v_cos",
+      "AUROC": 0.5261721193365283,
+      "AUPRC": 0.4507231975229401,
+      "N_valid": 9627
+    },
+    {
+      "Model": "dnabert1_cos",
+      "AUROC": 0.5181121304635402,
+      "AUPRC": 0.41038566661298187,
+      "N_valid": 9627
+    },
+    {
+      "Model": "genalm_cos",
+      "AUROC": 0.5123779603008765,
+      "AUPRC": 0.40485911554666243,
+      "N_valid": 9446
+    },
+    {
+      "Model": "prott5_mlm",
+      "AUROC": 0.5082248758658561,
+      "AUPRC": 0.4053063134544863,
+      "N_valid": 9595
+    },
+    {
+      "Model": "dnabert2_cos",
+      "AUROC": 0.5010866887643707,
+      "AUPRC": 0.40051578216700034,
+      "N_valid": 9626
+    },
+    {
+      "Model": "genalm_mlm",
+      "AUROC": 0.5002764639786773,
+      "AUPRC": 0.40193865284973995,
+      "N_valid": 9142
+    },
+    {
+      "Model": "hyenadna_cos",
+      "AUROC": 0.49907196320811775,
+      "AUPRC": 0.4081626051270405,
+      "N_valid": 9627
+    },
+    {
+      "Model": "ankh_mlm",
+      "AUROC": 0.4906940913040049,
+      "AUPRC": 0.4062362552617792,
+      "N_valid": 8249
+    },
+    {
+      "Model": "dnabert1_mlm",
+      "AUROC": 0.4793058018486711,
+      "AUPRC": 0.3851045531677767,
+      "N_valid": 9626
+    },
+    {
+      "Model": "dnabert2_mlm",
+      "AUROC": 0.4745703967227253,
+      "AUPRC": 0.38085761292062315,
+      "N_valid": 9625
+    },
+    {
+      "Model": "esm2_cos",
+      "AUROC": 0.4684067627804598,
+      "AUPRC": 0.3496872294330927,
+      "N_valid": 9627
+    }
+  ],
+  "ablation_results": [
+    {
+      "Ablation": "Best Single (ESM1b-MLM)",
+      "N_features": 1,
+      "AUROC": 0.9020839948433076,
+      "AUPRC": 0.8769982180902068,
+      "MCC": 0.6724556624666284
+    },
+    {
+      "Ablation": "Protein MLM Only",
+      "N_features": 5,
+      "AUROC": 0.920471821638585,
+      "AUPRC": 0.9034367659699398,
+      "MCC": 0.7019008261298623
+    },
+    {
+      "Ablation": "Nucleotide MLM Only",
+      "N_features": 4,
+      "AUROC": 0.6269296923824346,
+      "AUPRC": 0.5566472929182893,
+      "MCC": 0.2042148926215085
+    },
+    {
+      "Ablation": "Protein Cosine Only",
+      "N_features": 6,
+      "AUROC": 0.8690204640798681,
+      "AUPRC": 0.825193220290796,
+      "MCC": 0.5679673520082327
+    },
+    {
+      "Ablation": "Nucleotide Cosine Only",
+      "N_features": 5,
+      "AUROC": 0.5931553773327694,
+      "AUPRC": 0.5197406485522316,
+      "MCC": 0.13687525332692554
+    },
+    {
+      "Ablation": "All Protein (MLM+Cos)",
+      "N_features": 11,
+      "AUROC": 0.9334432141138086,
+      "AUPRC": 0.9170086589462074,
+      "MCC": 0.7235979500829776
+    },
+    {
+      "Ablation": "All Nucleotide (MLM+Cos)",
+      "N_features": 9,
+      "AUROC": 0.6653047508664611,
+      "AUPRC": 0.6115039792892636,
+      "MCC": 0.2740576799742825
+    },
+    {
+      "Ablation": "Protein + Nucleotide MLM",
+      "N_features": 9,
+      "AUROC": 0.9206580729274774,
+      "AUPRC": 0.9009232797229455,
+      "MCC": 0.7043123857632939
+    },
+    {
+      "Ablation": "All Foundation Models",
+      "N_features": 20,
+      "AUROC": 0.9374936186493639,
+      "AUPRC": 0.9220701460459962,
+      "MCC": 0.7233451456318075
+    },
+    {
+      "Ablation": "Foundation + Physicochemical",
+      "N_features": 29,
+      "AUROC": 0.9509396153125487,
+      "AUPRC": 0.9367817455735966,
+      "MCC": 0.7548117732357452
+    },
+    {
+      "Ablation": "Foundation + AlphaMissense",
+      "N_features": 11,
+      "AUROC": 0.9821703660735422,
+      "AUPRC": 0.9734743637044609,
+      "MCC": 0.8793683543546137
+    },
+    {
+      "Ablation": "Foundation + REVEL",
+      "N_features": 10,
+      "AUROC": 0.9788335508135031,
+      "AUPRC": 0.9708400096635023,
+      "MCC": 0.8620426300507144
+    },
+    {
+      "Ablation": "Full Ensemble (All)",
+      "N_features": 31,
+      "AUROC": 0.9867952324158025,
+      "AUPRC": 0.9811783438097761,
+      "MCC": 0.8987690249147215
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -N v4_iclr_analysis
+#PBS -q apolloq
+#PBS -l select=1:host=gnode6:ncpus=10:ngpus=1
+#PBS -l walltime=1:00:00
+#PBS -joe
+#PBS -P external
+
+cd $PBS_O_WORKDIR
+eval "$(conda shell.bash hook)"
+conda activate esm_meta
+
+echo "=== ICLR Analysis Started at $(date) ==="
+
+python3 analysis/full_analysis.py 2>&1
+
+echo ""
+echo "=== ICLR Analysis Finished at $(date) ==="
+ls -la analysis/d1/ analysis/d2/ 2>&1

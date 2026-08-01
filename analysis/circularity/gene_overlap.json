@@ -1,0 +1,10 @@
+{
+  "d1_test_genes": 6371,
+  "d2_test_genes": 2569,
+  "shared_genes": 2569,
+  "unique_d1": 3802,
+  "unique_d2": 0,
+  "shared_pct_of_d1": 40.32334013498666,
+  "d2_shared_variants": 9627,
+  "d2_unique_variants": 0
+}
