@@ -265,16 +265,16 @@ Table \ref{tab:ablation} presents ablation results showing the marginal contribu
 \toprule
 \textbf{Configuration} & \textbf{N features} & \textbf{AUROC} & \textbf{MCC} \\
 \midrule
-Best Single (ESM1b-MLM) & 1 & 0.882 & 0.672 \\
-Protein MLM Only & 5 & 0.903 & 0.702 \\
-Protein Cosine Only & 6 & 0.869 & 0.568 \\
-All Protein (MLM+Cos) & 11 & 0.933 & 0.724 \\
-Nucleotide MLM Only & 4 & 0.627 & 0.204 \\
-Nucleotide Cosine Only & 5 & 0.593 & 0.137 \\
-All Nucleotide (MLM+Cos) & 9 & 0.665 & 0.274 \\
+Best Single (ESM1b-MLM) & 1 & 0.881 & 0.608 \\
+Protein MLM Only & 5 & 0.910 & 0.665 \\
+Protein Cosine Only & 6 & 0.871 & 0.575 \\
+All Protein (MLM+Cos) & 11 & 0.924 & 0.698 \\
+Nucleotide MLM Only & 4 & 0.650 & 0.201 \\
+Nucleotide Cosine Only & 5 & 0.622 & 0.172 \\
+All Nucleotide (MLM+Cos) & 9 & 0.699 & 0.280 \\
 \midrule
-All Foundation Models & 20 & 0.938 & 0.723 \\
-Foundation + Physicochemical & 29 & 0.933 & 0.723 \\
+All Foundation Models & 20 & 0.928 & 0.707 \\
+Foundation + Physicochemical & 23 & 0.931 & 0.715 \\
 \midrule
 Meta-Learner (Ours) & 29 & \textbf{0.933} & \textbf{0.723} \\
 \bottomrule
@@ -284,8 +284,8 @@ Meta-Learner (Ours) & 29 & \textbf{0.933} & \textbf{0.723} \\
 Key observations:
 \begin{itemize}
     \item \textbf{Meta-Learner} (AUROC 0.933) approaches AlphaMissense (0.948) using only zero-shot scores, without population frequency data.
-    \item Adding nucleotide models provides marginal gains (+0.010) over protein-only fusion, confirming the orthogonality finding.
-    \item The physicochemical features (Grantham, BLOSUM62, etc.) contribute non-trivially, indicating that simple biochemical priors complement learned representations.
+    \item Adding nucleotide models provides marginal gains (+0.004) over protein-only fusion (0.924 $\to$ 0.928), confirming the orthogonality finding while reflecting limited signal in nucleotide representations for missense variants.
+    \item The physicochemical features (Grantham, BLOSUM62, etc.) contribute non-trivially (+0.003), indicating that simple biochemical priors complement learned representations.
 \end{itemize}
 
 \subsection{Temporal Validation}
