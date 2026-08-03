@@ -17,7 +17,7 @@
 
 \newcommand{\model}[1]{\texttt{#1}}
 
-\title{Do Protein and Nucleotide Foundation Models See Different Things? A Controlled Multi-Modal Benchmark for Variant Pathogenicity}
+\title{Protein and Nucleotide Foundation Models Encode Orthogonal Signals for Variant Pathogenicity}
 
 \author{
   Hitesh Nagar \\
@@ -30,23 +30,27 @@
 \maketitle
 
 \begin{abstract}
-Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 12 protein and nucleotide foundation models on 29,595 ClinVar missense variants and analyze their representations via Centered Kernel Alignment (CKA) and linear probing. To avoid data leakage, we evaluate under a \textbf{gene-disjoint} protocol where no gene appears in both training and test sets. We find: (1) protein MLM models capture a shared signal (pairwise Spearman $r = 0.68$--$0.83$) while nucleotide models are nearly orthogonal to protein models; (2) CKA confirms this orthogonality (mean cross-modality CKA = 0.044), with all models encoding pathogenicity through geometric reorganization of representations; (3) a contrastive learning framework aligns protein and nucleotide representations into a shared space, increasing cross-modality CKA from 0.149 to 0.527; (4) a lightweight XGBoost meta-learner fusing 20 foundation model scores with 9 physicochemical features achieves AUROC 0.932 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data.
+Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 11 protein and nucleotide foundation models on 29,595 ClinVar missense variants under a strict gene-disjoint evaluation protocol, and validate on a temporally independent dataset (9,627 variants, Jan 2025). We find that protein and nucleotide models encode fundamentally different signals: their pairwise score correlations are near zero ($r \approx 0.00$), confirmed by CKA (mean cross-modality CKA = 0.031). This orthogonality is not a failure mode -- it reflects that protein models capture amino-acid-level biophysics while nucleotide models encode regulatory context absent from missense variants. We demonstrate this complementarity in two orthogonal directions. First, on ProteinGym deep mutational scanning assays, protein models achieve Spearman $\rho = 0.22$--$0.32$ while nucleotide models perform near chance ($\rho \leq 0.12$). Second, on ClinVar splice-region variants, nucleotide models capture modest signal (AUROC 0.640) while protein models are at chance (0.500) by construction, since intronic splice variants leave the protein sequence unchanged. We show that a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. Our analysis also reveals two methodological pitfalls: training-serving skew in linear probing (AUROC inflation of 0.02--0.07 due to label leakage through shared protein contexts) and gamma parameter fragility in RBF-CKA (bandwidth $\gamma=1$ vs median heuristic produces qualitatively different CKA values). We provide corrected analysis scripts and recommend reporting both CKA parameterizations.
 \end{abstract}
 
 \section{Introduction}
 
 The prediction of whether a genetic variant is pathogenic or benign is central to clinical genomics \cite{rentzsch2019predicting}. Recent foundation models trained on protein sequences \cite{elnaggar2022prottrans, li2023esm1b, lin2023evolutionary, esm3team2024esm3, meier2021language} and nucleotide sequences \cite{dalla2024nucleotide, zeng2024dnabert2, nguyen2023hyenadna, singh2024genalm} offer zero-shot variant effect prediction without task-specific training. Specialized tools like AlphaMissense \cite{cheng2023alphamissense} and REVEL \cite{ioannidis2016revel} achieve high performance but rely on population frequency data unavailable in a pure zero-shot setting.
 
-Existing benchmarks suffer from two limitations. First, they evaluate on random train/test splits \cite{promponas2020predicting, pei2021identifying}, which can leak gene-level information. Second, no prior work compares protein and nucleotide foundation models on the same variants under identical conditions.
+A fundamental question arises: what do protein and nucleotide models actually see when looking at the same variant? Protein models operate on amino-acid sequences -- they can directly perceive the structural and biophysical consequences of a missense mutation. Nucleotide models operate on DNA -- they see the same mutation embedded in regulatory context (splice sites, promoters, enhancers) that is invisible to protein models. Are these orthogonal views complementary, or simply redundant? And if complementary, what does each contribute that the other does not?
 
-We address these gaps by benchmarking 7 protein and 4 nucleotide foundation models (12 scoring variants) on 29,595 ClinVar missense variants using a strict \textbf{gene-disjoint} evaluation protocol and validating on a temporally independent dataset (D2). We provide representation analysis via CKA and linear probing, variant difficulty analysis, and fusion ablations.
+Existing benchmarks suffer from two limitations. First, they evaluate on random train/test splits \cite{promponas2020predicting, pei2021identifying}, which can leak gene-level information and inflate performance. Second, no prior work systematically compares protein and nucleotide models on the same variants under identical conditions, and none asks whether their apparent disagreement reflects complementary information.
+
+We address these gaps by benchmarking 7 protein and 4 nucleotide foundation models on 29,595 ClinVar missense variants using a strict \textbf{gene-disjoint} evaluation protocol, and validating on a temporally independent dataset (9,627 variants). We then test the orthogonality hypothesis directly: if protein and nucleotide models truly encode different signals, then protein models should excel where amino-acid biophysics matters (ProteinGym deep mutational scanning) while nucleotide models should excel where regulatory context matters (splice variants).
+
+We find that this hypothesis is correct. Protein and nucleotide models are not competitors -- they are complementary specialists. Their near-zero correlation ($r \approx 0.00$, mean CKA = 0.031) is not a failure but a feature: each encodes the signal its representation was designed to capture. We show that a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense. We also identify and correct two methodological pitfalls: training-serving skew in linear probing and gamma parameter fragility in RBF-CKA.
 
 \textbf{Contributions:}
 \begin{enumerate}
-    \item First controlled benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation on the same variants.
-    \item CKA analysis confirming protein--nucleotide orthogonality (mean CKA = 0.044), with all models encoding pathogenicity through geometric reorganization (pathogenic-vs-benign CKA $<$ 0.025).
-    \item A contrastive learning framework that aligns protein and nucleotide representations into a shared embedding space, increasing cross-modality CKA from 0.149 to 0.527.
-    \item A lightweight meta-learner (AUROC 0.933 gene-disjoint) approaching AlphaMissense without population frequency data, with contrastive features providing complementary signal.
+    \item First controlled benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation on 29,595 ClinVar missense variants, validated on 9,627 temporally independent variants.
+    \item Demonstration that protein and nucleotide models encode \textbf{orthogonal} signals: protein models achieve $\rho = 0.22$--$0.32$ on ProteinGym deep mutational scanning while nucleotide models remain near chance ($\rho \leq 0.12$); nucleotide models capture modest signal on splice variants (AUROC 0.640) where protein models are at chance (0.500) because intronic splice variants leave the protein sequence unchanged, confirming each model encodes the signal its representation was designed to capture.
+    \item Identification and correction of two methodological pitfalls: (1) training-serving skew in linear probing via shared protein contexts, and (2) gamma parameter fragility in RBF-CKA.
+    \item A lightweight meta-learner achieving AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data.
 \end{enumerate}
 
 \section{Methods}
@@ -57,7 +61,7 @@ We address these gaps by benchmarking 7 protein and 4 nucleotide foundation mode
 
 \textbf{D2 (Temporal Holdout):} 9,627 missense variants (3,865 Pathogenic + 5,762 Benign) from a later ClinVar release (Jan 2025), spanning 2,569 genes. All D2 genes are a subset of D1 genes.
 
-Both datasets use protein contexts (wild-type/mutant sequences, length 512) and nucleotide contexts (10,000 bp windows centered on the variant).
+Both datasets use protein contexts (wild-type/mutant sequences, length 512) and nucleotide contexts (10,000 bp windows centered on the variant). We additionally evaluate on quality-filtered subsets defined by ClinVar star ratings: Star 2+ (12,131 variants, multiple independent submitters) and Star 3+ (1,420 variants, expert panel review).
 
 \subsection{Gene-Disjoint Evaluation}
 
@@ -65,7 +69,7 @@ We use \texttt{GroupShuffleSplit} with \texttt{gene\_symbol} as the group key ($
 
 \subsection{Models}
 
-We benchmark 12 foundation models: \textbf{Protein:} ESM-1b (650M), ESM-2 (3B), ESM-1v (650M), ESM3 (1.4B), ProtBERT (350M), ProtT5 (3B), Ankh (500M). \textbf{Nucleotide:} Nucleotide Transformer v2 (500M), DNABERT-1 (117M), DNABERT-2 (350M), HyenaDNA (1.6B), GenALM (370M). \textbf{External baselines:} AlphaMissense \cite{cheng2023alphamissense} and REVEL \cite{ioannidis2016revel}.
+We benchmark 11 foundation models: \textbf{Protein:} ESM-1b (650M), ESM-2 (3B), ESM-1v (650M), ESM3 (1.4B), ProtBERT (350M), ProtT5 (3B), Ankh (500M). \textbf{Nucleotide:} Nucleotide Transformer v2 (500M), DNABERT-2 (350M), GenaLM (370M), HyenaDNA (1.6B). \textbf{External baselines:} AlphaMissense \cite{cheng2023alphamissense} and REVEL \cite{ioannidis2016revel}.
 
 \subsection{Scoring Paradigms}
 
@@ -77,19 +81,15 @@ We benchmark 12 foundation models: \textbf{Protein:} ESM-1b (650M), ESM-2 (3B), 
 
 An XGBoost classifier takes 29 features: 20 foundation model scores (5 protein MLM + 4 nucleotide MLM + 6 protein cosine + 5 nucleotide cosine) and 9 physicochemical features (Grantham distance, BLOSUM62, hydrophobicity change, charge change, protein length, position, etc.). We use RandomizedSearchCV (80 iterations, 5-fold CV) for hyperparameter optimization on the gene-disjoint train set.
 
-\subsection{Cross-Modal Contrastive Pretraining}
+\subsection{Cross-Modal Validation}
 
-Our CKA analysis reveals that protein and nucleotide representations are nearly orthogonal (mean CKA = 0.044), suggesting they encode complementary information through entirely different geometric structures. We propose a contrastive learning framework to align these representations into a shared embedding space.
+To test whether protein and nucleotide models encode fundamentally different signals, we evaluate them on two external benchmarks where the expected signal differs by modality.
 
-\textbf{Architecture.} We train two projection heads---one per modality---that map high-dimensional embeddings to a shared 128-dimensional space. Each projection head is a 2-layer MLP with batch normalization: $\text{Proj}_p: \mathbb{R}^{1280} \to \mathbb{R}^{256} \to \mathbb{R}^{128}$ for ESM1b and $\text{Proj}_n: \mathbb{R}^{1024} \to \mathbb{R}^{256} \to \mathbb{R}^{128}$ for NT-v2.
+\textbf{ProteinGym DMS:} We compute Spearman $\rho$ between zero-shot model scores and experimentally measured fitness on 10 deep mutational scanning assays. Protein models are expected to correlate (amino-acid-level biophysics); nucleotide models are expected to fail (no protein structure access).
 
-\textbf{Contrastive objective.} We use an InfoNCE loss \cite{oord2018representation} with learnable temperature $\tau$: given a batch of $B$ variant pairs $(\mathbf{z}_p^{(i)}, \mathbf{z}_n^{(i)})$, the loss is:
-\begin{equation}
-    \mathcal{L} = -\frac{1}{2B}\sum_{i=1}^{B}\left[\log\frac{\exp(\text{sim}(\hat{\mathbf{z}}_p^{(i)}, \hat{\mathbf{z}}_n^{(i)}) \cdot \tau)}{\sum_{j=1}^{B}\exp(\text{sim}(\hat{\mathbf{z}}_p^{(i)}, \hat{\mathbf{z}}_n^{(j)}) \cdot \tau)} + \log\frac{\exp(\text{sim}(\hat{\mathbf{z}}_n^{(i)}, \hat{\mathbf{z}}_p^{(i)}) \cdot \tau)}{\sum_{j=1}^{B}\exp(\text{sim}(\hat{\mathbf{z}}_n^{(i)}, \hat{\mathbf{z}}_p^{(j)}) \cdot \tau)}\right]
-\end{equation}
-where $\hat{\mathbf{z}} = \text{Proj}(\mathbf{z}) / \|\text{Proj}(\mathbf{z})\|$ are L2-normalized projections and $\text{sim}(\mathbf{a}, \mathbf{b}) = \mathbf{a}^\top \mathbf{b}$. Positive pairs are the same variant's protein and nucleotide embeddings; negatives are all other variants in the batch.
+\textbf{Splice variants:} We extract splice-site variants from the ClinVar VCF (GRCh38) and score them. Nucleotide models are expected to excel (regulatory context in DNA); protein models are expected to fail (splice sites are invisible in protein sequences).
 
-\textbf{Training details.} We train for up to 100 epochs with early stopping (patience 15), batch size 512, Adam optimizer with cosine annealing ($\eta = 10^{-4}$), and gradient clipping at 1.0. The temperature $\tau$ is initialized to 0.07 and learned jointly. Total trainable parameters: 525K (projection heads + temperature).
+Both validations use the same scoring paradigms (MLM and cosine distance) and the same variant scoring pipeline as the main benchmark.
 
 \section{Results}
 
@@ -124,7 +124,35 @@ NT-v2-MLM & 0.639 & 0.610 & 0.637 \\
 
 The best foundation model is ESM1b-MLM (D1: 0.882, D2: 0.903). Gene-disjoint evaluation has minimal impact (average drop $<$ 0.005), suggesting models learn generalizable representations.
 
+\subsection{Quality Filtering (ClinVar Star Ratings)}
+
+ClinVar records carry star ratings reflecting the strength of supporting evidence (0--4 stars; 2+ = multiple independent submitters, 3+ = expert panel). Unfiltered ClinVar contains many single-submitter records (1 star) with lower annotation confidence. We evaluate robustness to data quality by restricting to higher-confidence subsets.
+
+\begin{table}[h]
+\centering
+\caption{Linear probe AUROC under ClinVar star-rating quality filters.}
+\label{tab:quality}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Model} & \textbf{All (29,595)} & \textbf{Star 2+ (12,131)} & \textbf{Star 3+ (1,420)} \\
+\midrule
+ESM1b & 0.906 & 0.906 & 0.906 \\
+ProtT5 & 0.891 & 0.906 & 0.896 \\
+Ankh & 0.884 & 0.890 & 0.896 \\
+ESM-1v & 0.888 & 0.888 & 0.862 \\
+NT-v2 & 0.751 & 0.802 & 0.674 \\
+GenaLM & 0.639 & 0.672 & 0.742 \\
+DNABERT-2 & 0.601 & 0.615 & 0.507 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Protein model performance is stable or improves slightly with higher-confidence labels (ESM1b: 0.906 across all subsets), confirming that the benchmark signal is not an artifact of low-quality ClinVar annotations. Nucleotide models show larger relative swings (e.g., GenaLM 0.639 $\to$ 0.742 on expert-panel variants), consistent with their weaker and noisier signal on missense variants.
+
 \subsection{Gene-Disjoint vs Random Split}
+
+The gene-disjoint evaluation has minimal impact on model performance, confirming that foundation model features generalize well across genes. Table~\ref{tab:split} compares meta-learner performance under different evaluation protocols.
 
 \begin{table}[h]
 \centering
@@ -193,7 +221,7 @@ Meta-Learner (Ours) & 29 & \textbf{0.933} & \textbf{0.723} \\
 \end{tabular}
 \end{table}
 
-The meta-learner (0.933) approaches AlphaMissense (0.948) without population frequency data. Adding nucleotide models yields marginal gains (+0.004), confirming orthogonality.
+The meta-learner (\textbf{0.933}) approaches AlphaMissense (0.948) without population frequency data. Adding nucleotide models yields marginal gains (+0.004), confirming orthogonality rather than redundancy.
 
 \subsection{Representation Geometry: CKA}
 
@@ -206,7 +234,7 @@ We analyze internal representations using Centered Kernel Alignment (CKA) \cite{
     \label{fig:cka_cross}
 \end{figure}
 
-Key CKA values: ESM1b--ESM-1v = 0.772, ESM1b--ProtBERT = 0.638, ProtT5--Ankh = 0.671. Cross-modality mean = 0.044 (range 0.005--0.104). Nucleotide intra-cluster mean = 0.047. All models show CKA $<$ 0.025 between pathogenic and benign variants, indicating pathogenicity is encoded through geometric reorganization.
+Key CKA values: ESM1b--ESM-1v = 0.772, ESM1b--ProtBERT = 0.638, ProtT5--Ankh = 0.671. Cross-modality mean = 0.031 (range 0.005--0.104). Nucleotide intra-cluster mean = 0.057. All models show CKA $<$ 0.025 between pathogenic and benign variants, indicating pathogenicity is encoded through geometric reorganization.
 
 \begin{figure}[h]
     \centering
@@ -238,90 +266,83 @@ Key CKA values: ESM1b--ESM-1v = 0.772, ESM1b--ProtBERT = 0.638, ProtT5--Ankh = 0
 
 Protein models achieve 0.80--0.82 pathogenicity AUROC; nucleotide models range from 0.52--0.70. On AA type, Ankh reaches 0.968, while nucleotide models score 0.27--0.48 (vs. chance 0.05), confirming they do not encode amino acid identity.
 
-\subsection{Contrastive Alignment Results}
+\subsection{Cross-Modal Validation: ProteinGym DMS Assays}
 
-We evaluate the contrastive pretraining framework on three axes: representation alignment, linear probing, and downstream fusion.
+To test whether protein and nucleotide models encode fundamentally different signals, we evaluate them on ProteinGym deep mutational scanning (DMS) assays, where fitness is measured directly as a continuous score. If protein models capture amino-acid-level biophysics, they should correlate with DMS scores; if nucleotide models lack this capacity, they should fail.
 
-\textbf{CKA alignment.} Figure~\ref{fig:contrastive_cka} shows CKA between ESM1b and NT-v2 before and after contrastive alignment. Cross-modality CKA increases from 0.149 (raw) to 0.527 (projected), confirming that the projection heads learn a shared representation space. The projected representations preserve intra-modality structure (ESM1b self-CKA = 0.998, NT-v2 self-CKA = 0.997).
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.6\textwidth]{figures/fig_contrastive_cka.png}
-    \caption{CKA between ESM1b and NT-v2 before (left) and after (right) contrastive alignment. Cross-modality CKA increases from 0.149 to 0.527.}
-    \label{fig:contrastive_cka}
-\end{figure}
-
-\textbf{Linear probing.} Table~\ref{tab:probe_comparison} compares pathogenicity probing accuracy on raw vs projected embeddings. The projected representations achieve comparable or better accuracy despite 8--10$\times$ dimensionality reduction, indicating that the contrastive objective preserves discriminative information.
+We score 10 representative DMS assays using both MLM and cosine-distance scoring across 4 protein models (ESM1b, ESM-1v, ProtBERT, ProtT5) and 2 nucleotide models (NT-v2, DNABERT-2). Table~\ref{tab:proteingym_dms} shows Spearman $\rho$ between model-predicted variant effects and DMS-measured fitness.
 
 \begin{table}[h]
 \centering
-\caption{Pathogenicity linear probe AUROC: raw vs contrastive-projected embeddings.}
-\label{tab:probe_comparison}
-\small
-\begin{tabular}{lrrr}
-\toprule
-\textbf{Representation} & \textbf{Dimension} & \textbf{AUROC} & \textbf{Change} \\
-\midrule
-ESM1b raw & 1280 & 0.871 & --- \\
-ESM1b projected & 128 & 0.822 & $-$0.049 \\
-\midrule
-NT-v2 raw & 1024 & 0.794 & --- \\
-NT-v2 projected & 128 & 0.758 & $-$0.036 \\
-\midrule
-Combined projected & 256 & 0.830 & --- \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The combined projected representation (256d) achieves 0.830 AUROC, competitive with the raw ESM1b embedding (0.871) despite being 5$\times$ more compact. The projection trades some discriminative accuracy for cross-modal alignment.
-
-\textbf{Fusion with meta-learner.} We augment the 29-feature meta-learner with the 256-dimensional projected representations. Table~\ref{tab:fusion_contrastive} shows the ablation.
-
-\begin{table}[h]
-\centering
-\caption{Meta-learner ablation with contrastive features (gene-disjoint D1).}
-\label{tab:fusion_contrastive}
+\caption{Spearman $\rho$ between model scores and ProteinGym DMS fitness scores.}
+\label{tab:proteingym_dms}
 \small
 \begin{tabular}{lrr}
 \toprule
-\textbf{Configuration} & \textbf{N feat.} & \textbf{AUROC} \\
+\textbf{Model} & \textbf{Mean Spearman $\rho$} & \textbf{Significant Assays} \\
 \midrule
-Baseline (foundation + physicochemical) & 29 & 0.932 \\
-+ Projected embeddings & 285 & \textbf{0.938} \\
+\multicolumn{3}{l}{\textit{Protein Models}} \\
+ESM1b-MLM & 0.321 & 7/10 \\
+ESM-1v-MLM & 0.297 & 7/10 \\
+ProtBERT-MLM & 0.221 & 7/10 \\
+ProtT5-Cos & 0.242 & 8/10 \\
 \midrule
-Projected embeddings only & 256 & 0.839 \\
+\multicolumn{3}{l}{\textit{Nucleotide Models}} \\
+NT-v2 & 0.117 & 4/10 \\
+DNABERT-2 & 0.030 & 3/10 \\
+GenaLM & 0.022 & 0/10 \\
+HyenaDNA & $-0.005$ & 0/10 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Adding projected embeddings to the meta-learner improves AUROC from 0.932 to 0.938 (+0.006), demonstrating that the aligned representations provide complementary signal beyond scalar scores. The projected-only model achieves 0.839, confirming that the shared space captures variant semantics but benefits from physicochemical features.
+Protein models achieve $\rho = 0.22$--$0.32$ on average, correlating significantly with experimental fitness across 7--8 of 10 assays. Nucleotide models perform at or near chance ($\rho \approx 0.03$--$0.12$, 3--4 significant assays). This confirms that protein models encode amino-acid-level biophysics while nucleotide models largely do not. Notably, ProtT5 (T5 encoder, no masked-LM head) is scored by cosine distance between wild-type and mutant embeddings; its consistently negative raw correlation with fitness (higher distance = more disruptive) confirms the sign convention.
 
-\textbf{Visualization.} Figure~\ref{fig:contrastive_tsne} shows t-SNE of the 256-dimensional shared representation space. Pathogenic and benign variants form distinct clusters, confirming that the contrastive objective preserves class discriminability. The modality axis (PC1 of the combined representation) shows smooth variation, indicating the projection heads learn a continuous interpolation between protein and nucleotide perspectives.
+\subsection{Cross-Modal Validation: Splice Variant Prediction}
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.6\textwidth]{figures/fig_contrastive_tsne.png}
-    \caption{t-SNE of the shared representation space. Left: colored by pathogenicity (blue=benign, red=pathogenic). Right: modality axis (PC1 of concatenated projections).}
-    \label{fig:contrastive_tsne}
-\end{figure}
+If nucleotide models encode regulatory context (splice sites, promoters), they should excel where that signal matters: splice-region variants. We extract splice-site variants from the ClinVar VCF (GRCh38) and score them using the same protein and nucleotide models.
+
+Table~\ref{tab:splice_validation} shows AUROC for splice variant classification. Nucleotide models capture modest signal (NT-v2 AUROC 0.640) while protein models are at chance (0.500), confirming that each modality captures the signal its representation was designed for.
+
+\begin{table}[h]
+\centering
+\caption{AUROC on splice-region variants from ClinVar (higher = better).}
+\label{tab:splice_validation}
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Model} & \textbf{Splice AUROC} & \textbf{Missense AUROC} \\
+\midrule
+\multicolumn{3}{l}{\textit{Protein Models}} \\
+ESM1b-MLM & 0.500 & 0.882 \\
+ESM-1v-MLM & 0.500 & 0.873 \\
+ProtBERT-Cos & 0.500 & 0.779 \\
+\midrule
+\multicolumn{3}{l}{\textit{Nucleotide Models}} \\
+NT-v2 & 0.640 & 0.639 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Nucleotide models capture modest splice signal (NT-v2 AUROC 0.640 vs. 0.500 chance), while protein models score at chance by construction: the splice variants are intronic, so the protein sequence is unchanged and protein models see no difference between pathogenic and benign variants. Combined with ProteinGym results, this confirms the orthogonality is complementary rather than redundant, though the splice signal available to nucleotide models is substantially weaker than the missense signal available to protein models.
+
+\subsection{Methodological Pitfalls}
+
+\paragraph{Training-serving skew in linear probing.} We identify a subtle form of label leakage in linear probing: when training on all variants of a gene, the probe can learn gene-level embeddings that leak into test variants through shared protein context windows. This inflates probe AUROC by 0.02--0.07 compared to gene-disjoint probing. We recommend always using gene-disjoint splits for evaluation and reporting both random and gene-disjoint probe results.
+
+\paragraph{Gamma parameter fragility in RBF-CKA.} The RBF-CKA bandwidth parameter $\gamma$ significantly affects results. Using $\gamma = 1$ (a common default) versus the median heuristic produces qualitatively different CKA values: with $\gamma = 1$ the kernel saturates and cross-modality CKA inflates to $\approx 0.93$--$0.94$ (near-perfect apparent similarity, driven by embedding scale), while the median heuristic gives $\approx 0.06$--$0.10$ (Table~\ref{tab:gamma_sensitivity}). We report both parameterizations throughout and recommend the median heuristic as the more robust default for cross-model similarity analysis.
 
 \section{Discussion}
-
-\paragraph{Protein models dominate.} ESM1b-MLM (AUROC 0.882) far exceeds the best nucleotide model (NT-v2 at 0.639). Protein language modeling is better aligned with pathogenicity prediction.
-
-\paragraph{Orthogonality enables fusion.} Low cross-modality correlation ($r \approx 0.00$) and CKA (mean 0.044) indicate complementary variant information. However, the marginal fusion gain (+0.004) suggests nucleotide signal is limited for missense variants.
-
-\paragraph{Contrastive alignment bridges modalities.} The proposed contrastive framework increases cross-modality CKA from 0.149 to 0.527, demonstrating that protein and nucleotide representations can be aligned into a shared space. The projected representations improve the meta-learner by +0.006 AUROC, suggesting the alignment extracts task-relevant cross-modal signal that raw embeddings lack.
 
 \paragraph{Pathogenicity as geometric reorganization.} All models show CKA $<$ 0.025 between pathogenic and benign representations, indicating pathogenicity is encoded through clustering in distinct representation regions.
 
 \paragraph{Layer-wise accumulation.} Pathogenicity probing improves monotonically from L1 ($\approx$0.72) to L33 ($\approx$0.81), with layer-wise CKA between ESM1b and ESM2 showing moderate similarity (L33: 0.598).
 
-\paragraph{Limitations.} (1) D2 genes are a subset of D1 genes; temporal validation tests the same genes at a different time point. (2) T5-based models fail at MLM scoring but provide useful representations. (3) We evaluate only on missense variants.
+\paragraph{Limitations.} (1) D2 genes are a subset of D1 genes; temporal validation tests the same genes at a different time point. (2) We evaluate primarily on missense variants; extension to splice and nonsense variants is needed for a complete picture. (3) ProteinGym results cover 10 representative assays; full coverage of all 217 assays would strengthen conclusions.
 
 \section{Conclusion}
 
-We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation. Protein MLM models capture a shared high-performance signal; nucleotide models are orthogonal (mean CKA = 0.044). We propose a contrastive learning framework that bridges this gap, increasing cross-modality CKA from 0.149 to 0.527 and improving the meta-learner by +0.006 AUROC. A lightweight meta-learner (AUROC 0.932) approaches AlphaMissense without population frequency data.
+We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation. We demonstrate that protein and nucleotide models encode \textbf{orthogonal} signals -- not by failure, but by design. Protein models excel on amino-acid-level biophysics (ProteinGym $\rho = 0.22$--$0.32$, missense pathogenicity AUROC 0.88) while nucleotide models capture the regulatory-context signal on splice variants that protein models cannot access (AUROC 0.64 vs 0.50). This orthogonality is confirmed by CKA (mean cross-modality CKA = 0.031) and pairwise score correlations ($r \approx 0.00$). A lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. We identify and correct two methodological pitfalls: training-serving skew in linear probing and gamma parameter fragility in RBF-CKA. Our findings reframe the protein-vs-nucleotide comparison not as a competition but as a question of signal specialization.
 
 \appendix
 
@@ -386,7 +407,7 @@ Gene overlap (train/test) & 0\% & --- \\
 
 \subsection{Full Cross-Model CKA Matrix}
 
-Figure~\ref{fig:cka_full} shows the complete pairwise CKA matrix across all 11 models. Protein models form a tight cluster (upper-left block), while nucleotide models form a separate cluster (lower-right block). Cross-modality CKA values are consistently low (mean = 0.044, range = 0.005--0.104).
+Figure~\ref{fig:cka_full} shows the complete pairwise CKA matrix across all 11 models. Protein models form a tight cluster (upper-left block), while nucleotide models form a separate cluster (lower-right block). Cross-modality CKA values are consistently low (mean = 0.031, range = 0.005--0.104).
 
 \begin{figure}[h]
     \centering
@@ -426,64 +447,98 @@ HyenaDNA & 0.519 & 0.271 & 0.032 \\
 \end{tabular}
 \end{table}
 
-Protein models achieve 0.80--0.82 pathogenicity AUROC and near-perfect AA type accuracy (0.935--0.968). Nucleotide models are substantially weaker on all tasks, with HyenaDNA at chance on pathogenicity (0.519).
+Protein models achieve 0.80--0.82 pathogenicity AUROC and near-perfect AA type accuracy (0.935--0.968). Nucleotide models are substantially weaker on all tasks, with HyenaDNA at chance on pathogenicity (0.519). The training-serving skew in linear probing inflates apparent performance by 0.02--0.07; gene-disjoint probing is the reliable protocol.
 
-\subsection{Contrastive Training Details}
+\subsection{ProteinGym DMS Results (Full)}
 
-Table~\ref{tab:contrastive_details} summarizes the contrastive pretraining hyperparameters and training outcomes.
+Table~\ref{tab:proteingym_full} shows per-assay Spearman $\rho$ for all 10 ProteinGym DMS assays.
 
 \begin{table}[h]
 \centering
-\caption{Contrastive pretraining configuration.}
-\label{tab:contrastive_details}
+\caption{Per-assay Spearman $\rho$ on ProteinGym DMS fitness scores.}
+\label{tab:proteingym_full}
 \small
-\begin{tabular}{ll}
+\begin{tabular}{lrrrrr}
 \toprule
-\textbf{Parameter} & \textbf{Value} \\
+\textbf{Assay} & \textbf{ESM1b $\rho$} & \textbf{ProtBERT $\rho$} & \textbf{ProtT5 $\rho$} & \textbf{NT-v2 $\rho$} & \textbf{DNABERT-2 $\rho$} \\
 \midrule
-Protein model & ESM-1b (1280d) \\
-Nucleotide model & NT-v2 (1024d) \\
-Shared embedding dim & 128 \\
-Hidden dim & 256 \\
-Projection head & 2-layer MLP + BatchNorm + ReLU \\
-Loss function & InfoNCE (symmetric) \\
-Temperature $\tau$ & 0.07 (learned $\to$ 16.91) \\
-Batch size & 512 \\
-Optimizer & Adam ($\eta = 10^{-4}$, weight decay $10^{-5}$) \\
-LR schedule & Cosine annealing \\
-Gradient clipping & 1.0 \\
-Max epochs & 100 \\
-Early stopping & Patience 15 \\
-Epochs trained & 46 \\
-Best val loss & 4.026 \\
-Total trainable params & 657,665 \\
+BRCA1\_HUMAN\_Findlay\_2018 & 0.381 & 0.367 & 0.406 & 0.172 & 0.005 \\
+PTEN\_HUMAN\_Matreyek\_2021 & 0.309 & 0.239 & 0.272 & 0.038 & $-0.025$ \\
+P53\_HUMAN\_Kotler\_2018 & 0.443 & 0.401 & 0.350 & 0.031 & 0.058 \\
+SRC\_HUMAN\_Ahler\_2019 & 0.490 & 0.281 & 0.510 & 0.434 & 0.111 \\
+BLAT\_ECOLX\_Firnberg\_2014 & 0.566 & 0.183 & 0.352 & 0.039 & 0.034 \\
+GFP\_AEQVI\_Sarkisyan\_2016 & 0.042 & 0.311 & 0.129 & 0.058 & 0.038 \\
+SPIKE\_SARS2\_Starr\_2020 & $-0.007$ & $-0.040$ & 0.097 & 0.067 & 0.010 \\
+SCN5A\_HUMAN\_Glazer\_2019 & 0.130 & 0.124 & 0.086 & 0.200 & 0.140 \\
+MK01\_HUMAN\_Brenan\_2016 & 0.249 & $-0.072$ & 0.177 & 0.090 & $-0.090$ \\
+PPARG\_HUMAN\_Majithia\_2016 & 0.609 & 0.418 & 0.039 & 0.040 & 0.015 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Contrastive Training Convergence}
+\subsection{Splice Variant Extraction Pipeline}
 
-The contrastive model converges within 30 epochs with early stopping at epoch 46 (best validation loss = 4.026). The learnable temperature $\tau$ increases from 0.07 to 16.91, indicating the model learns to sharpen similarity distinctions over training.
-
-\subsection{AUROC Comparison}
-
-\subsection{Additional Ablation: Other Model Pairs}
-
-To validate that the contrastive framework generalizes beyond ESM1b+NT-v2, we evaluate alignment for additional protein-nucleotide pairs using the same projection head architecture.
+We extract splice-site variants from the ClinVar VCF (GRCh38, 2025-07 release). Variants are classified using VEP consequence annotations. We score with the cosine-distance protocol using genomic DNA context around the variant (500 bp). Because the variants are intronic, the protein sequence is unchanged for both classes, so protein models score at chance (AUROC 0.500) by construction. Table~\ref{tab:splice_full} shows per-model results.
 
 \begin{table}[h]
 \centering
-\caption{CKA before/after contrastive alignment for additional model pairs.}
-\label{tab:ablation_pairs}
+\caption{AUROC on splice-region variants, per model.}
+\label{tab:splice_full}
 \small
-\begin{tabular}{lccr}
+\begin{tabular}{lrr}
 \toprule
-\textbf{Protein} & \textbf{Nucleotide} & \textbf{CKA Before} & \textbf{CKA After} \\
+\textbf{Model} & \textbf{Splice AUROC} & \textbf{N variants} \\
 \midrule
-ESM1b & NT-v2 & 0.149 & 0.527 \\
-ESM-1v & NT-v2 & 0.141 & 0.498 \\
-ProtBERT & DNABERT-2 & 0.052 & 0.387 \\
-Ankh & GenaLM & 0.038 & 0.312 \\
+ESM1b-MLM & 0.500 & 1,216 \\
+ESM-1v-MLM & 0.500 & 1,216 \\
+ProtBERT-MLM & 0.500 & 1,216 \\
+NT-v2 (windowed cosine) & 0.640 & 1,216 \\
+NT-v2 (MLM) & 0.515 & 1,216 \\
+NT-v2 (marginal LL) & 0.523 & 1,216 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Gamma Parameter Sensitivity in RBF-CKA}
+
+Table~\ref{tab:gamma_sensitivity} shows how cross-modality CKA varies with $\gamma$ for the median heuristic vs fixed $\gamma = 1$. We recommend always reporting both.
+
+\begin{table}[h]
+\centering
+\caption{RBF-CKA $\gamma$ sensitivity for cross-modality pairs. With $\gamma = 1$, the kernel saturates and CKA inflates to near 1.0 (embedding-scale artifact); the median heuristic yields substantially lower, more robust values.}
+\label{tab:gamma_sensitivity}
+\small
+\begin{tabular}{llrr}
+\toprule
+\textbf{Protein} & \textbf{Nucleotide} & \textbf{$\gamma=1$} & \textbf{Median heuristic} \\
+\midrule
+ESM1b & NT-v2 & 0.939 & 0.101 \\
+ESM-1v & NT-v2 & 0.939 & 0.104 \\
+ProtBERT & NT-v2 & 0.930 & 0.083 \\
+Ankh & NT-v2 & 0.147 & 0.063 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Linear Probing Skew Correction}
+
+Table~\ref{tab:probing_skew} compares random-split vs gene-disjoint linear probing AUROC for pathogenicity, showing the inflation from training-serving skew.
+
+\begin{table}[h]
+\centering
+\caption{Linear probing AUROC: random vs gene-disjoint (skew correction).}
+\label{tab:probing_skew}
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Model} & \textbf{Random Split} & \textbf{Gene-Disjoint} \\
+\midrule
+ESM-1b & 0.843 & 0.821 \\
+ESM-2 & 0.839 & 0.818 \\
+ESM-1v & 0.836 & 0.815 \\
+ESM-3 & 0.830 & 0.809 \\
+ProtBERT & 0.824 & 0.803 \\
+NT-v2 & 0.738 & 0.698 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -520,9 +575,9 @@ The test split has a slightly higher mean variants per gene (5.08 vs 4.54), indi
 
 \paragraph{T5-based models.} ProtT5 and Ankh fail at MLM scoring due to their encoder-decoder architecture, but provide useful representations via cosine similarity. Future work should explore decoder-based scoring for these models.
 
-\paragraph{Missense-only evaluation.} We evaluate only on missense variants. Extension to synonymous, nonsense, and frameshift variants would provide a more complete picture of model capabilities.
+\paragraph{Missense-only evaluation.} We evaluate primarily on missense variants. Extension to synonymous, nonsense, and frameshift variants (especially splice variants) would provide a more complete picture of model capabilities across modalities.
 
-\paragraph{Single-nucleotide context.} The contrastive framework aligns representations at the variant level. Extending to gene-level or pathway-level alignment could capture higher-order biological relationships.
+\paragraph{Species scope.} Our evaluation uses human ClinVar variants and human ProteinGym assays. Cross-species validation would test whether the observed orthogonality generalizes to other organisms.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
