@@ -499,6 +499,102 @@ NT-v2 (marginal LL) & 0.523 & 1,216 \\
 \end{tabular}
 \end{table}
 
+\subsection{Effect of Scoring Method and Window Size on Splice Prediction}
+
+The splice signal available to nucleotide models is sensitive to both the scoring method and the genomic context window used. Table~\ref{tab:splice_method} compares three NT-v2 scoring methods on the same 1,216 balanced variants, and Table~\ref{tab:splice_window} reports how the variant-centered cosine window size affects AUROC.
+
+\begin{table}[h]
+\centering
+\caption{NT-v2 splice AUROC by scoring method. Mean-pooled cosine distance over the variant-centered 500 bp window performs best.}
+\label{tab:splice_method}
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Scoring method} & \textbf{AUROC} & \textbf{AP} \\
+\midrule
+Cosine distance (500 bp window) & 0.640 & 0.615 \\
+Marginal log-likelihood & 0.523 & 0.522 \\
+Masked-LM at variant position & 0.515 & 0.514 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Window-size sensitivity of NT-v2 cosine distance on splice variants. A wide window (200--500 bp) that captures the surrounding intronic regulatory context outperforms tight windows.}
+\label{tab:splice_window}
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Window (bp each side)} & \textbf{AUROC} & \textbf{AP} \\
+\midrule
+10 & 0.612 & 0.570 \\
+20 & 0.612 & 0.573 \\
+30 & 0.612 & 0.574 \\
+50 & 0.622 & 0.582 \\
+100 & 0.637 & 0.599 \\
+200 & 0.639 & 0.605 \\
+500 & 0.640 & 0.615 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The cosine-distance embedding change over a broad window (0.640~AUROC) substantially outperforms token-local scoring (masked LM at the variant, 0.515; marginal log-likelihood, 0.523). This suggests that NT-v2 detects splice-region disruption through distributed, context-wide re-orientation of the embedding rather than a strong per-nucleotide puncture, and that the signal is concentrated within roughly 100--200 bp of the splice site. Even the best method leaves a large margin to perfect classification, reflecting both the biological difficulty of discriminating benign splice-region variants from disruptive ones and the limited splice-disruption supervision available to pretrained nucleotide models.
+
+\subsection{ProteinGym DNA Preprocessing}
+
+The ProteinGym DNA columns contain a systematic artifact: a fixed set of positions differs identically between the primary and mutant sequences in nearly every row, in addition to the intended mutation. Table~\ref{tab:artifact} lists the detected artifact positions (those that differ in $\geq 90\%$ of rows) per system. In all human-coded systems, the artifact is a single base near the end of the sequence; for the bacterial $\beta$-lactamase (BLAT) it corresponds to two consecutive positions, and for PTEN/SRC/MK01/GFP/PPARG to three (a full codon), reflecting an annotation drift between the reference and assay-transfer DNA columns rather than a genuine variant. These positions are excluded before computing the masked-LM score so that the mutation reflects the true variant only.
+
+\begin{table}[h]
+\centering
+\caption{Constant artifact positions removed from the ProteinGym DNA columns before MLM scoring.}
+\label{tab:artifact}
+\small
+\begin{tabular}{lr}
+\toprule
+\textbf{Assay} & \textbf{Artifact positions excluded} \\
+\midrule
+BRCA1\_HUMAN\_Findlay\_2018 & 4899 \\
+PTEN\_HUMAN\_Matreyek\_2021 & 849, 850, 851 \\
+P53\_HUMAN\_Kotler\_2018 & 499 \\
+SRC\_HUMAN\_Ahler\_2019 & 852, 853, 854 \\
+BLAT\_ECOLX\_Firnberg\_2014 & 171, 172 \\
+GFP\_AEQVI\_Sarkisyan\_2016 & 8, 112, 120, 121, 122, 313 \\
+SPIKE\_SARS2\_Starr\_2020 & 1493 \\
+SCN5A\_HUMAN\_Glazer\_2019 & 4872, 4873 \\
+MK01\_HUMAN\_Brenan\_2016 & 906, 907, 908 \\
+PPARG\_HUMAN\_Majithia\_2016 & 243, 244, 245 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Sign-flagged ProtT5 cosine scoring}
+
+ProtT5 uses a T5 encoder without a masked-language-model head, so it cannot be scored by MLM. We instead score it with the cosine distance between the mean-pooled wild-type and single-mutant embeddings: $\text{score} = 1 - \cos(\mathbf{z}_{\text{wt}}, \mathbf{z}_{\text{mut}})$, where higher distance indicates a more disruptive substitution. Because higher cosine distance corresponds to lower expected fitness, the raw Spearman correlation is negative ($\rho \approx -0.24$ mean); in Table~\ref{tab:proteingym_dms} and Table~\ref{tab:proteingym_full} we report the sign-flipped value (that is, $-\rho$ of the raw distance, equivalently $\rho_{\text{disruption fitness}}$) so that a positive value is a consistent encoding of fitness across all models. ProtT5 achieves a fitness-aligned $\rho = 0.242$ (8/10 significant), comparable to other protein models.
+
+\subsubsection{Splice variant annotation check.}
+To confirm that the splice variants leave the protein sequence unchanged, we cross-check the ClinVar consequence annotations (Table~\ref{tab:splice_consequences}). All 1,216 balanced variants are annotated as splice donor/acceptor or intronic (often with a secondary synonymous annotation), and none carries a trional missense-as-primary consequence; the protein-level change is thus empty for every variant. This is why protein models must score at AUROC $0.500$.
+
+\begin{table}[h]
+\centering
+\caption{Consequence profile of the 1,216 splice variants used for the splice AUROC evaluation.}
+\label{tab:splice_consequences}
+\small
+\begin{tabular}{lr}
+\toprule
+\textbf{Consequence} & \textbf{Count} \\
+\midrule
+Splice donor variant & 440 \\
+Splice acceptor variant & 383 \\
+Splice donor + intron & 137 \\
+Splice acceptor + intron & 136 \\
+Splice acceptor + synonymous & 75 \\
+Splice donor + synonymous & 44 \\
+Other (acceptor + UTR, etc.) & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Gamma Parameter Sensitivity in RBF-CKA}
 
 Table~\ref{tab:gamma_sensitivity} shows how cross-modality CKA varies with $\gamma$ for the median heuristic vs fixed $\gamma = 1$. We recommend always reporting both.
@@ -542,8 +638,6 @@ NT-v2 & 0.738 & 0.698 \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-All pairs show substantial CKA improvement after alignment, confirming that the framework is model-agnostic. Cross-modality CKA improvement scales with the initial alignment: pairs with higher initial CKA (ESM1b+NT-v2) achieve higher post-alignment CKA.
 
 \subsection{Gene-Level Analysis}
 
