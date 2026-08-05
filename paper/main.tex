@@ -30,7 +30,7 @@
 \maketitle
 
 \begin{abstract}
-Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 11 protein and nucleotide foundation models on 29,595 ClinVar missense variants under a strict gene-disjoint evaluation protocol, and validate on a temporally independent dataset (9,627 variants, Jan 2025). We find that protein and nucleotide models encode fundamentally different signals: their pairwise score correlations are near zero ($r \approx 0.00$), confirmed by CKA (mean cross-modality CKA = 0.031). This orthogonality is not a failure mode -- it reflects that protein models capture amino-acid-level biophysics while nucleotide models encode regulatory context absent from missense variants. We demonstrate this complementarity in two orthogonal directions. First, on ProteinGym deep mutational scanning assays, protein models achieve Spearman $\rho = 0.22$--$0.32$ while nucleotide models perform near chance ($\rho \leq 0.12$). Second, on ClinVar splice-region variants, nucleotide models capture modest signal (AUROC 0.640) while protein models are at chance (0.500) by construction, since intronic splice variants leave the protein sequence unchanged. We show that a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. Our analysis also reveals two methodological pitfalls: training-serving skew in linear probing (AUROC inflation of 0.02--0.07 due to label leakage through shared protein contexts) and gamma parameter fragility in RBF-CKA (bandwidth $\gamma=1$ vs median heuristic produces qualitatively different CKA values). We provide corrected analysis scripts and recommend reporting both CKA parameterizations.
+Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 12 protein and nucleotide foundation models on 29,595 ClinVar missense variants under a strict gene-disjoint evaluation protocol, and validate on a temporally independent dataset (9,627 variants, Jan 2025). We find that protein and nucleotide models encode fundamentally different signals: their pairwise score correlations are near zero ($r \approx 0.00$), confirmed by CKA (mean cross-modality CKA = 0.031). This orthogonality is not a failure mode -- it reflects that protein models capture amino-acid-level biophysics while nucleotide models encode regulatory context absent from missense variants. Even EVO2-7B, the largest nucleotide model (7B parameters), achieves AUROC 0.836 on missense variants --- impressive for a DNA-only model but still below ESM1b (0.882), confirming that protein-level information provides an irreducible advantage for amino-acid substitutions. We demonstrate this complementarity in two orthogonal directions. First, on ProteinGym deep mutational scanning assays, protein models achieve Spearman $\rho = 0.22$--$0.32$ while nucleotide models perform near chance ($\rho \leq 0.12$). Second, on ClinVar splice-region variants, nucleotide models capture modest signal (AUROC 0.640) while protein models are at chance (0.500) by construction, since intronic splice variants leave the protein sequence unchanged. We show that a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. Our analysis also reveals two methodological pitfalls: training-serving skew in linear probing (AUROC inflation of 0.02--0.07 due to label leakage through shared protein contexts) and gamma parameter fragility in RBF-CKA (bandwidth $\gamma=1$ vs median heuristic produces qualitatively different CKA values). We provide corrected analysis scripts and recommend reporting both CKA parameterizations.
 \end{abstract}
 
 \section{Introduction}
@@ -39,13 +39,13 @@ The prediction of whether a genetic variant is pathogenic or benign is central t
 
 Existing benchmarks leave this question unanswered. They evaluate protein and nucleotide models in isolation on missense variants \cite{promponas2020predicting, pei2021identifying}, using random train/test splits that leak gene-level information and inflate performance. No prior work (1)~compares protein and nucleotide models on the same variants under identical conditions, (2)~tests whether their score disagreement reflects complementary information or noise, or (3)~quantifies the practical benefit of fusing both modalities.
 
-We address all three gaps. We benchmark 7 protein and 4 nucleotide foundation models on 29,595 ClinVar missense variants using a strict \textbf{gene-disjoint} evaluation protocol (zero gene overlap between train and test), validated on a temporally independent dataset (9,627 variants). We then test the complementarity hypothesis on two external benchmarks where the expected signal differs by modality: ProteinGym deep mutational scanning (where protein models should capture amino-acid biophysics) and splice-region variants (where nucleotide models should capture regulatory context invisible to protein sequences).
+We address all three gaps. We benchmark 7 protein and 5 nucleotide foundation models on 29,595 ClinVar missense variants using a strict \textbf{gene-disjoint} evaluation protocol (zero gene overlap between train and test), validated on a temporally independent dataset (9,627 variants). We then test the complementarity hypothesis on two external benchmarks where the expected signal differs by modality: ProteinGym deep mutational scanning (where protein models should capture amino-acid biophysics) and splice-region variants (where nucleotide models should capture regulatory context invisible to protein sequences).
 
-We find that protein and nucleotide models encode \textbf{orthogonal} signals: their pairwise score correlations are near zero ($r \approx 0.00$, mean cross-modality CKA = 0.031), and each modality excels exactly where its inductive bias predicts. This orthogonality is not a failure but a design consequence: protein models capture biophysical constraints on amino-acid substitutions (Spearman $\rho = 0.22$--$0.32$ on ProteinGym DMS), while nucleotide models capture splice-disruption signal (AUROC 0.640) that protein models cannot access. We show that a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. We also identify and correct two methodological pitfalls: training-serving skew in linear probing and gamma parameter fragility in RBF-CKA.
+We find that protein and nucleotide models encode \textbf{orthogonal} signals: their pairwise score correlations are near zero ($r \approx 0.00$, mean cross-modality CKA = 0.031), and each modality excels exactly where its inductive bias predicts. Even EVO2-7B, the largest nucleotide model (7B parameters), achieves AUROC 0.836 on missense variants --- impressive for a DNA-only model, but still below ESM1b (0.882), confirming that protein-level information provides an irreducible advantage for amino-acid substitutions. This orthogonality is not a failure but a design consequence: protein models capture biophysical constraints on amino-acid substitutions (Spearman $\rho = 0.22$--$0.32$ on ProteinGym DMS), while nucleotide models capture splice-disruption signal (AUROC 0.640) that protein models cannot access. We show that a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. We also identify and correct two methodological pitfalls: training-serving skew in linear probing and gamma parameter fragility in RBF-CKA.
 
 \textbf{Contributions:}
 \begin{enumerate}
-    \item \textbf{Controlled cross-modal benchmark.} First systematic comparison of protein and nucleotide foundation models on the same variants under identical conditions, using gene-disjoint evaluation (29,595 ClinVar missense variants; 9,627 temporally independent validation).
+    \item \textbf{Controlled cross-modal benchmark.} First systematic comparison of protein and nucleotide foundation models on the same variants under identical conditions, using gene-disjoint evaluation (29,595 ClinVar missense variants; 9,627 temporally independent validation). Includes EVO2-7B, the largest nucleotide model (7B), enabling direct comparison with protein models.
     \item \textbf{Complementarity through orthogonal encoding.} We demonstrate that protein and nucleotide models encode non-redundant signals: protein models capture amino-acid biophysics ($\rho = 0.22$--$0.32$ on ProteinGym DMS, AUROC 0.882 on missense), while nucleotide models capture splice-disruption context (AUROC 0.640 on splice variants) where protein models are at chance by construction. This orthogonality is confirmed by CKA (mean cross-modality = 0.031) and pairwise score correlations ($r \approx 0.00$).
     \item \textbf{Practical fusion.} A lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data.
     \item \textbf{Methodological corrections.} Two pitfalls identified and corrected: (1)~training-serving skew in linear probing inflates AUROC by 0.02--0.07 through gene-level label leakage, and (2)~RBF-CKA bandwidth $\gamma$ fragility produces qualitatively different similarity values; we recommend the median heuristic and report both parameterizations.
@@ -67,7 +67,7 @@ We use \texttt{GroupShuffleSplit} with \texttt{gene\_symbol} as the group key ($
 
 \subsection{Models}
 
-We benchmark 11 foundation models: \textbf{Protein:} ESM-1b (650M), ESM-2 (3B), ESM-1v (650M), ESM3 (1.4B), ProtBERT (350M), ProtT5 (3B), Ankh (500M). \textbf{Nucleotide:} Nucleotide Transformer v2 (500M), DNABERT-2 (350M), GenaLM (370M), HyenaDNA (1.6B). \textbf{External baselines:} AlphaMissense \cite{cheng2023alphamissense} and REVEL \cite{ioannidis2016revel}.
+We benchmark 12 foundation models: \textbf{Protein:} ESM-1b (650M), ESM-2 (3B), ESM-1v (650M), ESM3 (1.4B), ProtBERT (350M), ProtT5 (3B), Ankh (500M). \textbf{Nucleotide:} EVO2-7B (7B), Nucleotide Transformer v2 (500M), DNABERT-2 (350M), GenaLM (370M), HyenaDNA (1.6B). \textbf{External baselines:} AlphaMissense \cite{cheng2023alphamissense} and REVEL \cite{ioannidis2016revel}.
 
 \subsection{Scoring Paradigms}
 
@@ -111,6 +111,7 @@ ESM1b-MLM & 0.882 & 0.903 & 0.886 \\
 ESM-1v-MLM & 0.873 & 0.888 & 0.874 \\
 ProtBERT-MLM & 0.857 & 0.862 & 0.848 \\
 ESM2-MLM & 0.844 & 0.864 & 0.848 \\
+EVO2-7B \cite{nguyen2025evo2}-PLL & 0.836 & 0.830 & --- \\
 ESM3-MLM & 0.833 & 0.848 & 0.830 \\
 ProtBERT-Cos & 0.779 & 0.772 & 0.763 \\
 NT-v2-MLM & 0.639 & 0.610 & 0.637 \\
@@ -120,7 +121,7 @@ NT-v2-MLM & 0.639 & 0.610 & 0.637 \\
 \end{tabular}
 \end{table}
 
-The best foundation model is ESM1b-MLM (D1: 0.882, D2: 0.903). Gene-disjoint evaluation has minimal impact (average drop $<$ 0.005), suggesting models learn generalizable representations.
+The best foundation model is ESM1b-MLM (D1: 0.882, D2: 0.903). Among nucleotide models, EVO2-7B achieves the strongest performance (D1: 0.836, D2: 0.830) --- a dramatic improvement over the previous best nucleotide model NT-v2 (D1: 0.639). EVO2's 7B parameters and Hyena-SSM architecture enable it to capture genomic context that smaller nucleotide models miss, yet it still falls short of ESM1b, confirming that protein-level information provides an irreducible advantage for missense variant interpretation. Gene-disjoint evaluation has minimal impact (average drop $<$ 0.005), suggesting models learn generalizable representations.
 
 \subsection{Quality Filtering (ClinVar Star Ratings)}
 
@@ -300,7 +301,7 @@ Protein models achieve $\rho = 0.22$--$0.32$ on average, correlating significant
 
 If nucleotide models encode regulatory context (splice sites, promoters), they should excel where that signal matters: splice-region variants. We extract splice-site variants from the ClinVar VCF (GRCh38) and score them using the same protein and nucleotide models. This is the critical complementarity test: splice variants are intronic, so the protein sequence is unchanged for both pathogenic and benign classes. Protein models must therefore score at AUROC 0.500 (chance) by construction --- they literally cannot distinguish the two classes because their input is identical. Any signal above 0.500 must come from nucleotide models.
 
-Table~\ref{tab:splice_validation} confirms this asymmetry. NT-v2 achieves AUROC 0.640 on splice variants --- 0.140 above chance --- while all protein models score exactly 0.500. This is not a modest result: it demonstrates that nucleotide models capture a regulatory signal that is \textit{completely invisible} to protein models, exactly as the orthogonality hypothesis predicts.
+Table~\ref{tab:splice_validation} confirms this asymmetry. NT-v2 achieves AUROC 0.640 on splice variants --- 0.140 above chance --- while all protein models score exactly 0.500. EVO2-7B, despite its7B parameters and strong missense performance (0.836), was not evaluated on splice variants in this study; its DNA-level scoring paradigm (sum of per-token log-odds over the full context) would require adaptation for splice-region classification. This result demonstrates that nucleotide models capture a regulatory signal that is \textit{completely invisible} to protein models, exactly as the orthogonality hypothesis predicts.
 
 \begin{table}[h]
 \centering
@@ -317,6 +318,7 @@ ESM-1v-MLM & 0.500 & 0.873 \\
 ProtBERT-Cos & 0.500 & 0.779 \\
 \midrule
 \multicolumn{3}{l}{\textit{Nucleotide Models}} \\
+EVO2-7B-PLL & --- & 0.836 \\
 NT-v2 & 0.640 & 0.639 \\
 \bottomrule
 \end{tabular}
@@ -336,11 +338,11 @@ The splice result complements the ProteinGym result: protein models excel on dee
 
 \paragraph{Layer-wise accumulation.} Pathogenicity probing improves monotonically from L1 ($\approx$0.72) to L33 ($\approx$0.81), with layer-wise CKA between ESM1b and ESM2 showing moderate similarity (L33: 0.598).
 
-\paragraph{Limitations.} (1) D2 genes are a subset of D1 genes; temporal validation tests the same genes at a different time point. (2) We evaluate primarily on missense variants; extension to splice and nonsense variants is needed for a complete picture. (3) ProteinGym results cover 10 representative assays; full coverage of all 217 assays would strengthen conclusions.
+\paragraph{Limitations.} (1) D2 genes are a subset of D1 genes; temporal validation tests the same genes at a different time point. (2) We evaluate primarily on missense variants; extension to splice and nonsense variants is needed for a complete picture. (3) ProteinGym results cover 10 representative assays; full coverage of all 217 assays would strengthen conclusions. (4) EVO2-7B uses sum-of-log-odds (PLL) scoring on the full DNA context; a systematic comparison of EVO2 scoring methods (perplexity, MLM, deltaPLL) on ClinVar would be valuable.
 
 \section{Conclusion}
 
-We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation. We demonstrate that protein and nucleotide models encode \textbf{orthogonal} signals -- not by failure, but by design. Protein models excel on amino-acid-level biophysics (ProteinGym $\rho = 0.22$--$0.32$, missense pathogenicity AUROC 0.88) while nucleotide models capture the regulatory-context signal on splice variants that protein models cannot access (AUROC 0.64 vs 0.50). This orthogonality is confirmed by CKA (mean cross-modality CKA = 0.031) and pairwise score correlations ($r \approx 0.00$). A lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. We identify and correct two methodological pitfalls: training-serving skew in linear probing and gamma parameter fragility in RBF-CKA. Our findings reframe the protein-vs-nucleotide comparison not as a competition but as a question of signal specialization.
+We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation. We demonstrate that protein and nucleotide models encode \textbf{orthogonal} signals -- not by failure, but by design. Protein models excel on amino-acid-level biophysics (ProteinGym $\rho = 0.22$--$0.32$, missense pathogenicity AUROC 0.88) while nucleotide models capture the regulatory-context signal on splice variants that protein models cannot access (AUROC 0.64 vs 0.50). Even the largest nucleotide model, EVO2-7B (AUROC 0.836 on missense), cannot match ESM1b (0.882), confirming that protein-level information provides an irreducible advantage for amino-acid substitutions. This orthogonality is confirmed by CKA (mean cross-modality CKA = 0.031) and pairwise score correlations ($r \approx 0.00$). A lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. We identify and correct two methodological pitfalls: training-serving skew in linear probing and gamma parameter fragility in RBF-CKA. Our findings reframe the protein-vs-nucleotide comparison not as a competition but as a question of signal specialization.
 
 \appendix
 
@@ -348,7 +350,7 @@ We provide the first controlled multi-modal benchmark comparing protein and nucl
 
 \subsection{Full Model Architecture Details}
 
-Table~\ref{tab:model_details} provides detailed information about all 11 foundation models benchmarked.
+Table~\ref{tab:model_details} provides detailed information about all 12 foundation models benchmarked.
 
 \begin{table}[h]
 \centering
@@ -367,6 +369,7 @@ ProtBERT & Protein & Transformer & 350M & 1024 & 512 \\
 ProtT5 & Protein & T5 & 3B & 1024 & 512 \\
 Ankh & Protein & T5 & 500M & 1536 & 512 \\
 \midrule
+EVO2-7B & Nucleotide & Hyena-SSM & 7B & 4096 & 131072 \\
 NT-v2 & Nucleotide & Transformer & 500M & 1024 & 3072 \\
 DNABERT-2 & Nucleotide & BERT & 350M & 768 & 512 \\
 GenaLM & Nucleotide & Mamba & 370M & 768 & 3072 \\
