@@ -1,0 +1,34 @@
+#!/bin/bash
+#PBS -N evo2_40b_te_build2
+#PBS -q apolloq
+#PBS -l select=1:ncpus=10:ngpus=5:mem=128gb:host=gnode6
+#PBS -l walltime=02:00:00
+#PBS -P external
+#PBS -j oe
+
+cd /ibdc-scratch2/home/Csir-igib001_lthukral/hitesh/bech_v4
+source activate /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2
+
+NCCL_INC=$(python -c "import nvidia.nccl; import os; print(os.path.join(os.path.dirname(nvidia.nccl.__file__), 'include'))")
+echo "NCCL include: $NCCL_INC"
+ls $NCCL_INC/nccl.h
+
+echo ""
+echo "=== Step 1: Uninstall old TE ==="
+pip uninstall -y transformer-engine transformer-engine-torch 2>&1
+
+echo ""
+echo "=== Step 2: Build TE with NCCL include path ==="
+export CPATH=$NCCL_INC:$CPATH
+export CFLAGS="-I$NCCL_INC"
+export CXXFLAGS="-I$NCCL_INC"
+pip install --no-cache-dir transformer_engine[pytorch] 2>&1
+echo "TE install exit code: $?"
+
+echo ""
+echo "=== Step 3: Verify TE import ==="
+python -c "import transformer_engine; print(f'TE version: {transformer_engine.__version__}')" 2>&1
+
+echo ""
+echo "=== Step 4: Run EVO2-40B test ==="
+python test_evo2_40b.py 2>&1

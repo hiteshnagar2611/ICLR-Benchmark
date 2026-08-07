@@ -1,0 +1,18 @@
+/etc/profile.d/SetGHPL.sh: line 1: module: command not found
+/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/bin/python
+Python 3.11.15
+CUDA_VISIBLE_DEVICES: MIG-3f29b232-f604-573f-8f3a-3dd90b8b455a,MIG-e146b75e-4c6c-5a32-8362-3e72dd5ac242,MIG-5ae83ffe-2a71-5871-b6c9-a1b2d1e93376,MIG-5a717537-e1ef-563e-ab05-9f6bfe0c7377,MIG-29555066-518d-5ba5-933e-c73a87a0afe3
+PyTorch version: 2.7.1+cu128
+CUDA available: True
+CUDA device count: 1
+  GPU 0: NVIDIA A100-SXM4-40GB MIG 3g.20gb, 19.5 GB
+
+Attempting to load EVO2-40B...
+
+============================================================
+ERROR: RuntimeError
+============================================================
+Found empty `transformer-engine` meta package installed. Install `transformer-engine` with framework extensions via'pip3 install --no-build-isolation transformer-engine[pytorch,jax]==VERSION' or 'pip3 install transformer-engine[core]` for the TE core lib only. The `core_cu12` or `core_cu13` extra deps can be used to specify CUDA version for the TE core lib.
+============================================================
+
+Total time: 3.3s

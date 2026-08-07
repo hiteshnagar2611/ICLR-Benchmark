@@ -1,0 +1,69 @@
+/etc/profile.d/SetGHPL.sh: line 1: module: command not found
+=== Uninstall everything ===
+WARNING: Skipping transformer-engine as it is not installed.
+WARNING: Skipping transformer-engine-torch as it is not installed.
+WARNING: Skipping transformer-engine-cu13 as it is not installed.
+
+=== Install TE cu12 core (prebuilt, 437MB) ===
+Requirement already satisfied: zipp>=3.20 in /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages (from importlib-metadata>=1.0->transformer-engine-cu12==2.17.1) (4.1.0)
+Requirement already satisfied: annotated-types>=0.6.0 in /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages (from pydantic->transformer-engine-cu12==2.17.1) (0.8.0)
+Requirement already satisfied: pydantic-core==2.46.4 in /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages (from pydantic->transformer-engine-cu12==2.17.1) (2.46.4)
+Requirement already satisfied: typing-extensions>=4.14.1 in /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages (from pydantic->transformer-engine-cu12==2.17.1) (4.15.0)
+Requirement already satisfied: typing-inspection>=0.4.2 in /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages (from pydantic->transformer-engine-cu12==2.17.1) (0.4.2)
+cu12 install exit: 0
+
+=== Verify cu12 core is loaded ===
+Available cublas: ['/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/nvidia/cublas/lib/libcublas.so.12', '/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/nvidia/cublas/lib/libcublasLt.so.12']
+
+=== Install TE torch (build from source) ===
+Building wheels for collected packages: transformer_engine_torch
+  Building wheel for transformer_engine_torch (pyproject.toml): started
+  Building wheel for transformer_engine_torch (pyproject.toml): still running...
+  Building wheel for transformer_engine_torch (pyproject.toml): finished with status 'done'
+  Created wheel for transformer_engine_torch: filename=transformer_engine_torch-2.17.1-cp311-cp311-linux_x86_64.whl size=971459 sha256=3fa5e0737054cba37f3630c440ca29707bae39dfa20ee1ab9b5307c84a8ddbce
+  Stored in directory: /var/tmp/pbs.301495.brahm-login/pip-ephem-wheel-cache-ymgk1vyt/wheels/92/04/53/e9a379e54116097586d5996548f9c770a5b83ebb535b4e6fd4
+Successfully built transformer_engine_torch
+Installing collected packages: transformer_engine_cu13, transformer_engine_torch
+
+Successfully installed transformer_engine_cu13-2.17.1 transformer_engine_torch-2.17.1
+TE torch exit: 0
+
+=== Install TE main ===
+Collecting transformer_engine
+  Using cached transformer_engine-2.17.1-py3-none-any.whl.metadata (26 kB)
+Using cached transformer_engine-2.17.1-py3-none-any.whl (1.0 MB)
+Installing collected packages: transformer_engine
+Successfully installed transformer_engine-2.17.1
+
+=== Verify TE ===
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/transformer_engine/__init__.py", line 14, in <module>
+    import transformer_engine.common
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/transformer_engine/common/__init__.py", line 382, in <module>
+    _TE_LIB_CTYPES = _load_core_library()
+                     ^^^^^^^^^^^^^^^^^^^^
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/transformer_engine/common/__init__.py", line 360, in _load_core_library
+    return ctypes.CDLL(_get_shared_object_file("core"), mode=ctypes.RTLD_GLOBAL | os.RTLD_LAZY)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/ctypes/__init__.py", line 376, in __init__
+    self._handle = _dlopen(self._name, mode)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: libcublas.so.13: cannot open shared object file: No such file or directory
+
+=== Run EVO2-40B test ===
+CUDA_VISIBLE_DEVICES: MIG-0cfa1ce1-a60c-59e9-aa9a-83fb3cfb22c9,MIG-f4214701-a5fb-599c-93f3-fccebd78a231,MIG-e239e215-8ed4-5b03-878a-577a603520d9,MIG-3f97985e-e22a-5179-9b75-6ba1f6e0ec5d,MIG-3f29b232-f604-573f-8f3a-3dd90b8b455a
+PyTorch version: 2.7.1+cu128
+CUDA available: True
+CUDA device count: 1
+  GPU 0: NVIDIA A100-SXM4-40GB MIG 3g.20gb, 19.5 GB
+
+Attempting to load EVO2-40B...
+
+============================================================
+ERROR: OSError
+============================================================
+libcublas.so.13: cannot open shared object file: No such file or directory
+============================================================
+
+Total time: 4.1s

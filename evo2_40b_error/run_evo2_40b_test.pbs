@@ -1,0 +1,13 @@
+#!/bin/bash
+#PBS -N evo2_40b_test
+#PBS -q apolloq
+#PBS -l select=1:ncpus=10:ngpus=5:mem=128gb:host=gnode6
+#PBS -l walltime=00:30:00
+#PBS -P external
+#PBS -j oe
+
+cd /ibdc-scratch2/home/Csir-igib001_lthukral/hitesh/bech_v4
+source activate /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2
+which python
+python --version
+python test_evo2_40b.py 2>&1

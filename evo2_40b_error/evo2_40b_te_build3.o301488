@@ -1,0 +1,67 @@
+/etc/profile.d/SetGHPL.sh: line 1: module: command not found
+NCCL: /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/nvidia/nccl/include
+CUDNN: /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/nvidia/cudnn/include
+CUBLAS: /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/nvidia/cublas/include
+CUDA: /ibdc-hpc/apps1/cuda-12.4/include
+nccl.h: /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/nvidia/nccl/include/nccl.h
+cudnn.h: /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/nvidia/cudnn/include/cudnn.h
+
+=== Uninstall old TE ===
+WARNING: Skipping transformer-engine as it is not installed.
+WARNING: Skipping transformer-engine-torch as it is not installed.
+
+=== Build TE with all include paths ===
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.0/5.0 MB 3.8 MB/s  0:00:01
+Downloading protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl (327 kB)
+Downloading onnxscript-0.7.1-py3-none-any.whl (721 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 722.0/722.0 kB 4.0 MB/s  0:00:00
+Downloading onnx_ir-0.2.1-py3-none-any.whl (166 kB)
+Downloading pydantic-2.13.4-py3-none-any.whl (472 kB)
+Downloading pydantic_core-2.46.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 4.1 MB/s  0:00:00
+Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Building wheels for collected packages: transformer_engine_torch
+  Building wheel for transformer_engine_torch (pyproject.toml): started
+  Building wheel for transformer_engine_torch (pyproject.toml): still running...
+  Building wheel for transformer_engine_torch (pyproject.toml): finished with status 'done'
+  Created wheel for transformer_engine_torch: filename=transformer_engine_torch-2.17.1-cp311-cp311-linux_x86_64.whl size=971464 sha256=ae9d292675cc3d0b107b939cf615ba92d2e555d2d5f827af16d9fc4ca7fffd0b
+  Stored in directory: /var/tmp/pbs.301488.brahm-login/pip-ephem-wheel-cache-zc2ubxxz/wheels/92/04/53/e9a379e54116097586d5996548f9c770a5b83ebb535b4e6fd4
+Successfully built transformer_engine_torch
+Installing collected packages: zipp, typing-inspection, transformer_engine, pydantic-core, protobuf, ml_dtypes, annotated-types, pydantic, onnx, importlib-metadata, transformer_engine_cu13, onnx_ir, onnxscript, nvdlfw-inspect, transformer_engine_torch
+
+Successfully installed annotated-types-0.8.0 importlib-metadata-9.0.0 ml_dtypes-0.5.4 nvdlfw-inspect-0.2.2 onnx-1.22.0 onnx_ir-0.2.1 onnxscript-0.7.1 protobuf-7.35.1 pydantic-2.13.4 pydantic-core-2.46.4 transformer_engine-2.17.1 transformer_engine_cu13-2.17.1 transformer_engine_torch-2.17.1 typing-inspection-0.4.2 zipp-4.1.0
+TE install exit code: 0
+
+=== Verify TE ===
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/transformer_engine/__init__.py", line 14, in <module>
+    import transformer_engine.common
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/transformer_engine/common/__init__.py", line 382, in <module>
+    _TE_LIB_CTYPES = _load_core_library()
+                     ^^^^^^^^^^^^^^^^^^^^
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages/transformer_engine/common/__init__.py", line 360, in _load_core_library
+    return ctypes.CDLL(_get_shared_object_file("core"), mode=ctypes.RTLD_GLOBAL | os.RTLD_LAZY)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/ctypes/__init__.py", line 376, in __init__
+    self._handle = _dlopen(self._name, mode)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: libcublas.so.13: cannot open shared object file: No such file or directory
+
+=== Run EVO2-40B test ===
+CUDA_VISIBLE_DEVICES: MIG-0cfa1ce1-a60c-59e9-aa9a-83fb3cfb22c9,MIG-f4214701-a5fb-599c-93f3-fccebd78a231,MIG-e239e215-8ed4-5b03-878a-577a603520d9,MIG-3f97985e-e22a-5179-9b75-6ba1f6e0ec5d,MIG-3f29b232-f604-573f-8f3a-3dd90b8b455a
+PyTorch version: 2.7.1+cu128
+CUDA available: True
+CUDA device count: 1
+  GPU 0: NVIDIA A100-SXM4-40GB MIG 3g.20gb, 19.5 GB
+
+Attempting to load EVO2-40B...
+
+============================================================
+ERROR: OSError
+============================================================
+libcublas.so.13: cannot open shared object file: No such file or directory
+============================================================
+
+Total time: 4.2s

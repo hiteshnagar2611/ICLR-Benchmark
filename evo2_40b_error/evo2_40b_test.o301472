@@ -1,0 +1,15 @@
+/etc/profile.d/SetGHPL.sh: line 1: module: command not found
+CUDA_VISIBLE_DEVICES: MIG-0cfa1ce1-a60c-59e9-aa9a-83fb3cfb22c9,MIG-f4214701-a5fb-599c-93f3-fccebd78a231,MIG-e239e215-8ed4-5b03-878a-577a603520d9,MIG-3f97985e-e22a-5179-9b75-6ba1f6e0ec5d,MIG-3f29b232-f604-573f-8f3a-3dd90b8b455a
+PyTorch version: 1.12.1+cu102
+CUDA available: True
+CUDA device count: 1
+/opt/apps/anaconda3/lib/python3.9/site-packages/torch/cuda/__init__.py:146: UserWarning: 
+NVIDIA A100-SXM4-40GB MIG 3g.20gb with CUDA capability sm_80 is not compatible with the current PyTorch installation.
+The current PyTorch install supports CUDA capabilities sm_37 sm_50 sm_60 sm_70.
+If you want to use the NVIDIA A100-SXM4-40GB MIG 3g.20gb GPU with PyTorch, please check the instructions at https://pytorch.org/get-started/locally/
+
+  warnings.warn(incompatible_device_warn.format(device_name, capability, " ".join(arch_list), device_name))
+Traceback (most recent call last):
+  File "/ibdc-scratch2/home/Csir-igib001_lthukral/hitesh/bech_v4/test_evo2_40b.py", line 16, in <module>
+    print(f"  GPU {i}: {props.name}, {props.total_mem / 1024**3:.1f} GB", flush=True)
+AttributeError: 'torch._C._CudaDeviceProperties' object has no attribute 'total_mem'

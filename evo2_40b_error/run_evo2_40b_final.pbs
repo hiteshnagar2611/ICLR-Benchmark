@@ -1,0 +1,63 @@
+#!/bin/bash
+#PBS -N evo2_40b_final
+#PBS -q apolloq
+#PBS -l select=1:ncpus=10:ngpus=5:mem=128gb:host=gnode6
+#PBS -l walltime=02:00:00
+#PBS -P external
+#PBS -j oe
+
+cd /ibdc-scratch2/home/Csir-igib001_lthukral/hitesh/bech_v4
+source activate /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2
+
+CUDA_INC="/ibdc-hpc/apps1/cuda-12.4/include"
+CUDA_LIB="/ibdc-hpc/apps1/cuda-12.4/lib64"
+NCCL_INC=$(python -c "import nvidia.nccl; import os; print(os.path.join(os.path.dirname(nvidia.nccl.__file__), 'include'))")
+CUDNN_INC=$(python -c "import nvidia.cudnn; import os; print(os.path.join(os.path.dirname(nvidia.cudnn.__file__), 'include'))")
+CUBLAS_INC=$(python -c "import nvidia.cublas; import os; print(os.path.join(os.path.dirname(nvidia.cublas.__file__), 'include'))")
+CUBLAS_LIB=$(python -c "import nvidia.cublas; import os; print(os.path.join(os.path.dirname(nvidia.cublas.__file__), 'lib'))")
+NCCL_LIB=$(python -c "import nvidia.nccl; import os; print(os.path.join(os.path.dirname(nvidia.nccl.__file__), 'lib'))")
+CUDNN_LIB=$(python -c "import nvidia.cudnn; import os; print(os.path.join(os.path.dirname(nvidia.cudnn.__file__), 'lib'))")
+
+export CPATH=$NCCL_INC:$CUDNN_INC:$CUBLAS_INC:$CUDA_INC:$CPATH
+export CFLAGS="-I$NCCL_INC -I$CUDNN_INC -I$CUBLAS_INC -I$CUDA_INC"
+export CXXFLAGS="-I$NCCL_INC -I$CUDNN_INC -I$CUBLAS_INC -I$CUDA_INC"
+export LD_LIBRARY_PATH=$CUBLAS_LIB:$NCCL_LIB:$CUDNN_LIB:$CUDA_LIB:$LD_LIBRARY_PATH
+export CUDA_HOME=/ibdc-hpc/apps1/cuda-12.4
+
+echo "=== Uninstall everything ==="
+pip uninstall -y transformer-engine transformer-engine-torch transformer-engine-cu13 2>&1 | tail -3
+
+echo ""
+echo "=== Install TE cu12 core (prebuilt, 437MB) ==="
+pip install transformer-engine-cu12==2.17.1 2>&1 | tail -5
+echo "cu12 install exit: $?"
+
+echo ""
+echo "=== Verify cu12 core is loaded ==="
+python -c "
+import ctypes, os, glob
+site = '/ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2/lib/python3.11/site-packages'
+# Check for cu12 core lib
+for pattern in ['transformer_engine_cuda*/lib/libnvidia_transformer_engine*.so', 'transformer_engine*/lib/libnvidia_transformer_engine*.so']:
+    for f in glob.glob(os.path.join(site, pattern)):
+        print(f'Found: {f}')
+# Check what libcublas is available
+print('Available cublas:', glob.glob(os.path.join(site, 'nvidia/cublas/lib/libcublas*')))
+" 2>&1
+
+echo ""
+echo "=== Install TE torch (build from source) ==="
+pip install --no-cache-dir transformer_engine_torch 2>&1 | tail -10
+echo "TE torch exit: $?"
+
+echo ""
+echo "=== Install TE main ==="
+pip install transformer_engine 2>&1 | tail -5
+
+echo ""
+echo "=== Verify TE ==="
+python -c "import transformer_engine; print(f'TE version: {transformer_engine.__version__}')" 2>&1
+
+echo ""
+echo "=== Run EVO2-40B test ==="
+python test_evo2_40b.py 2>&1
