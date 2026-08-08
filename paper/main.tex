@@ -71,9 +71,28 @@ We benchmark 12 foundation models: \textbf{Protein:} ESM-1b (650M), ESM-2 (3B), 
 
 \subsection{Scoring Paradigms}
 
-\textbf{MLM Score:} $s_{\text{MLM}} = \log P(x_{\text{mut}} | x_{\text{context}}) - \log P(x_{\text{wt}} | x_{\text{context}})$. More negative = more deleterious.
+We employ two scoring paradigms for zero-shot variant effect prediction.
 
-\textbf{Cosine Similarity:} $s_{\text{cos}} = \frac{\mathbf{h}_{\text{mut}} \cdot \mathbf{h}_{\text{wt}}}{\|\mathbf{h}_{\text{mut}}\| \|\mathbf{h}_{\text{wt}}\|}$. Lower = more disruptive.
+\textbf{MLM Score:} For protein models with masked language model heads, we compute the log-likelihood ratio:
+\begin{equation}
+    s_{\text{MLM}} = \log P(x_{\text{mut}} \mid x_{\text{context}}) - \log P(x_{\text{wt}} \mid x_{\text{context}})
+    \label{eq:mlm}
+\end{equation}
+where $x_{\text{mut}}$ and $x_{\text{wt}}$ are the mutant and wild-type amino acids, and $x_{\text{context}}$ is the surrounding sequence. More negative values indicate more deleterious substitutions.
+
+\textbf{Cosine Similarity:} For encoder-only models (ProtT5, Ankh), we compute embedding similarity:
+\begin{equation}
+    s_{\text{cos}} = \frac{\mathbf{h}_{\text{mut}} \cdot \mathbf{h}_{\text{wt}}}{\|\mathbf{h}_{\text{mut}}\| \|\mathbf{h}_{\text{wt}}\|}
+    \label{eq:cosine}
+\end{equation}
+where $\mathbf{h}_{\text{mut}}$ and $\mathbf{h}_{\text{wt}}$ are mean-pooled embeddings. Lower values indicate more disruptive substitutions.
+
+\textbf{EVO2 Scoring:} For EVO2, we compute the pseudolikelihood delta:
+\begin{equation}
+    s_{\text{EVO2}} = \sum_{i} \log P(x_i^{\text{mut}} \mid x_{<i}) - \sum_{i} \log P(x_i^{\text{wt}} \mid x_{<i})
+    \label{eq:evo2}
+\end{equation}
+summed over the variant position in the 6,002 nt context window. We negate this score so that higher values indicate more pathogenic variants, consistent with the MLM convention.
 
 \subsection{Meta-Learner}
 
@@ -86,16 +105,41 @@ We introduce \textbf{Cross-Modal Attention Fusion (CMAF)}, a novel architecture 
 \textbf{Architecture.} CMAF consists of four components:
 
 \begin{enumerate}
-    \item \textbf{Modality Projectors:} Separate linear projections map protein features (7 MLM scores: ESM1b, ESM-2, ESM-1v, ESM3, ProtBERT, ProtT5, Ankh) and DNA features (3 EVO2 scores: delta, wild-type, mutant) to a common 64-dimensional space.
+    \item \textbf{Modality Projectors:} Separate linear projections map protein features (7 MLM scores: ESM1b, ESM-2, ESM-1v, ESM3, ProtBERT, ProtT5, Ankh) and DNA features (3 EVO2 scores: delta, wild-type, mutant) to a common $d$-dimensional space:
+    \begin{equation}
+        \mathbf{z}_p = \text{LayerNorm}(\text{GELU}(\mathbf{W}_p \mathbf{x}_p + \mathbf{b}_p)), \quad \mathbf{z}_d = \text{LayerNorm}(\text{GELU}(\mathbf{W}_d \mathbf{x}_d + \mathbf{b}_d))
+        \label{eq:project}
+    \end{equation}
+    where $\mathbf{x}_p \in \mathbb{R}^{7}$ and $\mathbf{x}_d \in \mathbb{R}^{3}$ are raw features, and $\mathbf{W}_p, \mathbf{W}_d \in \mathbb{R}^{d \times n}$ are learnable projections ($d=64$).
     
-    \item \textbf{Cross-Modal Attention:} A multi-head attention layer (4 heads) computes inter-modality relationships. Each modality attends to both protein and DNA signals, capturing complementary information.
+    \item \textbf{Cross-Modal Attention:} A multi-head attention layer ($h=4$ heads) computes inter-modality relationships. We concatenate both modalities as a sequence $\mathbf{S} = [\mathbf{z}_p; \mathbf{z}_d] \in \mathbb{R}^{2 \times d}$ and compute:
+    \begin{equation}
+        \text{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \text{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}\right)\mathbf{V}
+        \label{eq:attention}
+    \end{equation}
+    where $\mathbf{Q} = \mathbf{S}\mathbf{W}_Q$, $\mathbf{K} = \mathbf{S}\mathbf{W}_K$, $\mathbf{V} = \mathbf{S}\mathbf{W}_V$ are query, key, and value projections. The output is averaged across sequence positions and heads.
     
-    \item \textbf{Gating Module:} A learned sigmoid gate outputs per-variant modality weights $\alpha_{\text{protein}}$ and $\alpha_{\text{DNA}}$ (summing to 1), enabling the model to adaptively weight protein vs DNA features for each variant.
+    \item \textbf{Gating Module:} A learned sigmoid gate outputs per-variant modality weights:
+    \begin{equation}
+        \boldsymbol{\alpha} = \text{softmax}(\mathbf{W}_g [\mathbf{z}_p; \mathbf{z}_d] + \mathbf{b}_g), \quad \alpha_p + \alpha_d = 1
+        \label{eq:gate}
+    \end{equation}
+    where $\alpha_p$ and $\alpha_d$ are the protein and DNA weights, respectively.
     
-    \item \textbf{Classifier:} A 2-layer MLP with LayerNorm and GELU activation predicts pathogenicity from the gated, attended representation.
+    \item \textbf{Classifier:} A 2-layer MLP with LayerNorm and GELU activation predicts pathogenicity:
+    \begin{equation}
+        \hat{y} = \sigma(\mathbf{W}_2 \cdot \text{GELU}(\text{LayerNorm}(\mathbf{W}_1 \mathbf{z}_{\text{fused}} + \mathbf{b}_1)) + \mathbf{b}_2)
+        \label{eq:classifier}
+    \end{equation}
+    where $\mathbf{z}_{\text{fused}} = \alpha_p \mathbf{z}_p + \alpha_d \mathbf{z}_d + \mathbf{z}_{\text{attn}}$ is the gated, attended representation with residual connection.
 \end{enumerate}
 
-\textbf{Training.} We use AdamW optimizer (lr=$5\times10^{-4}$, weight decay=$10^{-4}$) with early stopping (patience=10). Hyperparameters are selected via 3-fold cross-validation over $\{64, 128\}$ hidden dimensions, $\{2, 4\}$ attention heads, and learning rates $\{5\times10^{-4}, 10^{-4}\}$. The loss combines BCE with a diversity term encouraging balanced gate weights: $\mathcal{L} = \mathcal{L}_{\text{BCE}} + 0.01 \cdot \mathcal{L}_{\text{diversity}}$.
+\textbf{Training Objective.} We minimize the binary cross-entropy loss with a diversity regularization term:
+\begin{equation}
+    \mathcal{L} = \underbrace{-\frac{1}{N}\sum_{i=1}^{N} [y_i \log \hat{y}_i + (1-y_i)\log(1-\hat{y}_i)]}_{\mathcal{L}_{\text{BCE}}} + \lambda \underbrace{\left(-\frac{1}{N}\sum_{i=1}^{N} \alpha_{p,i} \log \alpha_{d,i}\right)}_{\mathcal{L}_{\text{diversity}}}
+    \label{eq:loss}
+\end{equation}
+where $\lambda = 0.01$ balances classification and gate diversity. The diversity term encourages balanced modality usage during early training, preventing premature collapse to a single modality.
 
 \textbf{Key insight.} The gating module learns to weight modalities based on their information content for missense variants. EVO2's evolutionary conservation signal (delta score) has a larger dynamic range than ESM1b's MLM score, leading the attention mechanism to weight DNA features more heavily. This suggests that for missense variants, evolutionary conservation provides complementary signal to amino acid-level effects captured by protein models.
 
@@ -274,6 +318,45 @@ CMAF achieves AUROC 0.928 on D1 and 0.902 on D2, competitive with the 29-feature
 \textbf{Interpretation.} While ESM1b achieves higher individual AUROC (0.882 vs 0.819), EVO2 provides complementary evolutionary conservation signal that the attention mechanism exploits. For missense variants, both amino acid-level effects (ESM1b) and evolutionary constraint (EVO2) matter, but EVO2's conservation signal appears more discriminative when combined via attention. This finding suggests that the optimal modality weighting depends on the specific biological context, and adaptive fusion can outperform static ensembles.
 
 \textbf{Comparison with baselines.} CMAF outperforms all linear fusion methods (LR-ESM1b+EVO2: 0.895, LR-ESM1b+EVO2+Phys: 0.897) and individual models (ESM1b: 0.882, EVO2: 0.819). It approaches the XGBoost V1 meta-learner (0.935) with greater interpretability and fewer features.
+
+Figure~\ref{fig:cmaf_architecture} shows the CMAF architecture. Figure~\ref{fig:gate_weights} presents the learned gate weight distributions, and Figure~\ref{fig:attention_heatmap} shows the cross-modal attention patterns across heads.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/fig_cmaf_architecture.png}
+    \caption{CMAF architecture. Protein (ESM1b) and DNA (EVO2) features are projected to a common space, fused via cross-modal attention, and gated to produce per-variant modality weights. The classifier predicts pathogenicity from the gated representation.}
+    \label{fig:cmaf_architecture}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/fig_gate_weights.png}
+    \caption{Gate weight analysis. (a) Distribution of modality weights: DNA (EVO2) dominates with mean $\alpha_d = 0.92$. (b) Weight space showing most variants cluster near the DNA axis. (c) Protein weight by variant label.}
+    \label{fig:gate_weights}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/fig_attention_heatmap.png}
+    \caption{Cross-modal attention weights across 4 heads. Query rows attend to Key columns. DNA-focused heads (1, 3) weight DNA keys more heavily; balanced heads (2, 4) distribute attention more evenly.}
+    \label{fig:attention_heatmap}
+\end{figure}
+
+Figure~\ref{fig:roc_curves} compares ROC curves across all methods, and Figure~\ref{fig:ablation} summarizes the fusion ablation study.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figures/fig_roc_curves.png}
+    \caption{ROC curves for CMAF vs baselines. CMAF (AUROC 0.928) approaches XGBoost V1 (0.935) while providing interpretable modality weights.}
+    \label{fig:roc_curves}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.75\textwidth]{figures/fig_ablation_study.png}
+    \caption{Fusion ablation study. CMAF achieves competitive performance with fewer features (17 vs 29) and provides interpretable modality weights.}
+    \label{fig:ablation}
+\end{figure}
 
 \subsection{Representation Geometry: CKA}
 
