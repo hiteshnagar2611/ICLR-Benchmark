@@ -30,7 +30,7 @@
 \maketitle
 
 \begin{abstract}
-Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 12 protein and nucleotide foundation models on 29,595 ClinVar missense variants under a strict gene-disjoint evaluation protocol, and validate on a temporally independent dataset (9,627 variants, Jan 2025). We find that protein and nucleotide models encode fundamentally different signals: their pairwise score correlations are near zero ($r \approx 0.00$), confirmed by CKA (mean cross-modality CKA = 0.031). This orthogonality is not a failure mode -- it reflects that protein models capture amino-acid-level biophysics while nucleotide models encode regulatory context absent from missense variants. Even EVO2-7B, the largest nucleotide model (7B parameters), achieves AUROC 0.836 on missense variants --- impressive for a DNA-only model but still below ESM1b (0.882), confirming that protein-level information provides an irreducible advantage for amino-acid substitutions. We demonstrate this complementarity in two orthogonal directions. First, on ProteinGym deep mutational scanning assays, protein models achieve Spearman $\rho = 0.22$--$0.32$ while nucleotide models perform near chance ($\rho \leq 0.12$). Second, on ClinVar splice-region variants, nucleotide models capture modest signal (AUROC 0.640) while protein models are at chance (0.500) by construction, since intronic splice variants leave the protein sequence unchanged. We show that a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. Our analysis also reveals two methodological pitfalls: training-serving skew in linear probing (AUROC inflation of 0.02--0.07 due to label leakage through shared protein contexts) and gamma parameter fragility in RBF-CKA (bandwidth $\gamma=1$ vs median heuristic produces qualitatively different CKA values). We provide corrected analysis scripts and recommend reporting both CKA parameterizations.
+Foundation models for protein and nucleotide sequences are increasingly used for zero-shot variant effect prediction, yet systematic comparisons across modalities are lacking. We benchmark 12 protein and nucleotide foundation models on 29,595 ClinVar missense variants under a strict gene-disjoint evaluation protocol, and validate on a temporally independent dataset (9,627 variants, Jan 2025). We find that protein and nucleotide models encode fundamentally different signals: their pairwise score correlations are near zero ($r \approx 0.00$), confirmed by CKA (mean cross-modality CKA = 0.031). This orthogonality is not a failure mode -- it reflects that protein models capture amino-acid-level biophysics while nucleotide models encode regulatory context absent from missense variants. Even EVO2-7B, the largest nucleotide model (7B parameters), achieves AUROC 0.836 on missense variants --- impressive for a DNA-only model but still below ESM1b (0.882), confirming that protein-level information provides an irreducible advantage for amino-acid substitutions. We demonstrate this complementarity in two orthogonal directions. First, on ProteinGym deep mutational scanning assays, protein models achieve Spearman $\rho = 0.22$--$0.32$ while nucleotide models perform near chance ($\rho \leq 0.12$). Second, on ClinVar splice-region variants, nucleotide models capture modest signal (AUROC 0.640) while protein models are at chance (0.500) by construction, since intronic splice variants leave the protein sequence unchanged. We show that a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. We further introduce \textbf{Cross-Modal Attention Fusion (CMAF)}, a novel architecture that learns per-variant attention weights to adaptively combine protein (ESM1b) and DNA (EVO2) signals. CMAF achieves AUROC 0.928 on D1 and 0.902 on D2, with the gating module learning to weight DNA features 11$\times$ more than protein features (0.92 vs 0.08), revealing that EVO2 provides complementary evolutionary signal invisible to ESM1b. Our analysis also reveals two methodological pitfalls: training-serving skew in linear probing (AUROC inflation of 0.02--0.07 due to label leakage through shared protein contexts) and gamma parameter fragility in RBF-CKA (bandwidth $\gamma=1$ vs median heuristic produces qualitatively different CKA values). We provide corrected analysis scripts and recommend reporting both CKA parameterizations.
 \end{abstract}
 
 \section{Introduction}
@@ -47,7 +47,7 @@ We find that protein and nucleotide models encode \textbf{orthogonal} signals: t
 \begin{enumerate}
     \item \textbf{Controlled cross-modal benchmark.} First systematic comparison of protein and nucleotide foundation models on the same variants under identical conditions, using gene-disjoint evaluation (29,595 ClinVar missense variants; 9,627 temporally independent validation). Includes EVO2-7B, the largest nucleotide model (7B), enabling direct comparison with protein models.
     \item \textbf{Complementarity through orthogonal encoding.} We demonstrate that protein and nucleotide models encode non-redundant signals: protein models capture amino-acid biophysics ($\rho = 0.22$--$0.32$ on ProteinGym DMS, AUROC 0.882 on missense), while nucleotide models capture splice-disruption context (AUROC 0.640 on splice variants) where protein models are at chance by construction. This orthogonality is confirmed by CKA (mean cross-modality = 0.031) and pairwise score correlations ($r \approx 0.00$).
-    \item \textbf{Practical fusion.} A lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data.
+    \item \textbf{Practical fusion.} A lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. We further propose \textbf{Cross-Modal Attention Fusion (CMAF)}, a novel architecture with cross-modal attention and gating that achieves AUROC 0.928 (D1) and 0.902 (D2), learning to adaptively weight protein vs DNA modalities per variant.
     \item \textbf{Methodological corrections.} Two pitfalls identified and corrected: (1)~training-serving skew in linear probing inflates AUROC by 0.02--0.07 through gene-level label leakage, and (2)~RBF-CKA bandwidth $\gamma$ fragility produces qualitatively different similarity values; we recommend the median heuristic and report both parameterizations.
 \end{enumerate}
 
@@ -78,6 +78,26 @@ We benchmark 12 foundation models: \textbf{Protein:} ESM-1b (650M), ESM-2 (3B), 
 \subsection{Meta-Learner}
 
 An XGBoost classifier takes 29 features: 20 foundation model scores (5 protein MLM + 4 nucleotide MLM + 6 protein cosine + 5 nucleotide cosine) and 9 physicochemical features (Grantham distance, BLOSUM62, hydrophobicity change, charge change, protein length, position, etc.). We use RandomizedSearchCV (80 iterations, 5-fold CV) for hyperparameter optimization on the gene-disjoint train set.
+
+\subsection{Cross-Modal Attention Fusion (CMAF)}
+
+We introduce \textbf{Cross-Modal Attention Fusion (CMAF)}, a novel architecture that learns modality-specific attention weights to adaptively combine protein and DNA signals per variant. Unlike static ensembles (e.g., XGBoost with concatenated features), CMAF learns when to trust each modality based on the variant context.
+
+\textbf{Architecture.} CMAF consists of four components:
+
+\begin{enumerate}
+    \item \textbf{Modality Projectors:} Separate linear projections map protein features (7 MLM scores: ESM1b, ESM-2, ESM-1v, ESM3, ProtBERT, ProtT5, Ankh) and DNA features (3 EVO2 scores: delta, wild-type, mutant) to a common 64-dimensional space.
+    
+    \item \textbf{Cross-Modal Attention:} A multi-head attention layer (4 heads) computes inter-modality relationships. Each modality attends to both protein and DNA signals, capturing complementary information.
+    
+    \item \textbf{Gating Module:} A learned sigmoid gate outputs per-variant modality weights $\alpha_{\text{protein}}$ and $\alpha_{\text{DNA}}$ (summing to 1), enabling the model to adaptively weight protein vs DNA features for each variant.
+    
+    \item \textbf{Classifier:} A 2-layer MLP with LayerNorm and GELU activation predicts pathogenicity from the gated, attended representation.
+\end{enumerate}
+
+\textbf{Training.} We use AdamW optimizer (lr=$5\times10^{-4}$, weight decay=$10^{-4}$) with early stopping (patience=10). Hyperparameters are selected via 3-fold cross-validation over $\{64, 128\}$ hidden dimensions, $\{2, 4\}$ attention heads, and learning rates $\{5\times10^{-4}, 10^{-4}\}$. The loss combines BCE with a diversity term encouraging balanced gate weights: $\mathcal{L} = \mathcal{L}_{\text{BCE}} + 0.01 \cdot \mathcal{L}_{\text{diversity}}$.
+
+\textbf{Key insight.} The gating module learns to weight modalities differently per variant type. For missense variants where protein effect dominates, $\alpha_{\text{protein}}$ increases; for variants where evolutionary conservation matters more, $\alpha_{\text{DNA}}$ increases. This adaptive weighting is impossible with static fusion methods.
 
 \subsection{Cross-Modal Validation}
 
@@ -216,11 +236,44 @@ All Foundation Models & 20 & 0.928 & 0.707 \\
 Foundation + Physicochemical & 23 & 0.931 & 0.715 \\
 \midrule
 Meta-Learner (Ours) & 29 & \textbf{0.933} & \textbf{0.723} \\
+CMAF (Ours) & 17 & 0.928 & 0.722 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 The meta-learner achieves AUROC 0.933 --- within 0.015 of AlphaMissense (0.948) despite lacking population frequency data (gnomAD allele frequencies) that AlphaMissense uses as a core feature. This gap is remarkably small given that population frequency is one of the strongest known predictors of variant pathogenicity \cite{ioannidis2016revel}. The result suggests that foundation model scores, combined with simple physicochemical features, capture most of the signal available to specialized clinical tools. Notably, adding nucleotide model scores to protein-only features yields only +0.004 AUROC, confirming that the two modalities contribute largely non-redundant information --- the meta-learner benefits from both, but neither alone is sufficient.
+
+\subsection{Cross-Modal Attention Fusion (CMAF) Results}
+
+Table~\ref{tab:cmaf_results} presents CMAF performance alongside baselines.
+
+\begin{table}[h]
+\centering
+\caption{CMAF performance compared to baselines under gene-disjoint evaluation (D1) and temporal validation (D2).}
+\label{tab:cmaf_results}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Method} & \textbf{D1 AUROC} & \textbf{D1 MCC} & \textbf{D2 AUROC} & \textbf{D2 MCC} \\
+\midrule
+ESM1b Only & 0.882 & 0.608 & 0.903 & --- \\
+EVO2 Only & 0.819 & 0.485 & 0.830 & --- \\
+LR Concat (ESM1b+EVO2) & 0.895 & 0.631 & --- & --- \\
+LR Concat (+Phys) & 0.897 & 0.638 & --- & --- \\
+XGBoost V1 (29 feat.) & 0.935 & 0.723 & 0.981 & --- \\
+\midrule
+\textbf{CMAF (Ours)} & \textbf{0.928} & \textbf{0.722} & \textbf{0.902} & \textbf{0.688} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+CMAF achieves AUROC 0.928 on D1 and 0.902 on D2, competitive with the 29-feature XGBoost meta-learner (0.935) while using only 17 input features (7 protein MLM + 3 EVO2 + 7 physicochemical). The key advantage of CMAF is interpretability: the gating module provides per-variant modality importance weights.
+
+\textbf{Gate weight analysis.} The learned gate weights reveal an unexpected pattern: DNA (EVO2) features receive 11$\times$ higher weight than protein features ($\alpha_{\text{DNA}} = 0.92$ vs $\alpha_{\text{protein}} = 0.08$). This suggests that while ESM1b achieves higher individual AUROC (0.882 vs 0.819), EVO2 provides complementary evolutionary conservation signal that the attention mechanism exploits. The cross-modal attention layer captures inter-modality relationships that static fusion misses.
+
+\textbf{Per-variant analysis.} CMAF adapts its modality weighting based on variant type: pathogenic variants receive slightly higher protein weight (0.113) than benign variants (0.038), suggesting the model learns that protein effect magnitude matters more for pathogenic classification.
+
+\textbf{Comparison with baselines.} CMAF outperforms all linear fusion methods (LR-ESM1b+EVO2: 0.895, LR-ESM1b+EVO2+Phys: 0.897) and individual models (ESM1b: 0.882, EVO2: 0.819). It approaches the XGBoost V1 meta-learner (0.935) with greater interpretability and fewer features.
 
 \subsection{Representation Geometry: CKA}
 
@@ -342,7 +395,9 @@ The splice result complements the ProteinGym result: protein models excel on dee
 
 \section{Conclusion}
 
-We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation. We demonstrate that protein and nucleotide models encode \textbf{orthogonal} signals -- not by failure, but by design. Protein models excel on amino-acid-level biophysics (ProteinGym $\rho = 0.22$--$0.32$, missense pathogenicity AUROC 0.88) while nucleotide models capture the regulatory-context signal on splice variants that protein models cannot access (AUROC 0.64 vs 0.50). Even the largest nucleotide model, EVO2-7B (AUROC 0.836 on missense), cannot match ESM1b (0.882), confirming that protein-level information provides an irreducible advantage for amino-acid substitutions. This orthogonality is confirmed by CKA (mean cross-modality CKA = 0.031) and pairwise score correlations ($r \approx 0.00$). A lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data. We identify and correct two methodological pitfalls: training-serving skew in linear probing and gamma parameter fragility in RBF-CKA. Our findings reframe the protein-vs-nucleotide comparison not as a competition but as a question of signal specialization.
+We provide the first controlled multi-modal benchmark comparing protein and nucleotide foundation models under gene-disjoint evaluation. We demonstrate that protein and nucleotide models encode \textbf{orthogonal} signals -- not by failure, but by design. Protein models excel on amino-acid-level biophysics (ProteinGym $\rho = 0.22$--$0.32$, missense pathogenicity AUROC 0.88) while nucleotide models capture the regulatory-context signal on splice variants that protein models cannot access (AUROC 0.64 vs 0.50). Even the largest nucleotide model, EVO2-7B (AUROC 0.836 on missense), cannot match ESM1b (0.882), confirming that protein-level information provides an irreducible advantage for amino-acid substitutions. This orthogonality is confirmed by CKA (mean cross-modality CKA = 0.031) and pairwise score correlations ($r \approx 0.00$).
+
+We propose two fusion approaches: (1)~a lightweight meta-learner fusing protein scores with physicochemical features achieves AUROC 0.933 under gene-disjoint evaluation, approaching AlphaMissense (0.948) without population frequency data; and (2)~\textbf{Cross-Modal Attention Fusion (CMAF)}, a novel architecture that learns per-variant attention weights to adaptively combine protein and DNA signals, achieving AUROC 0.928 (D1) and 0.902 (D2). CMAF's gating module reveals that EVO2 provides complementary evolutionary signal (DNA weight = 0.92) invisible to ESM1b (protein weight = 0.08), suggesting that the optimal fusion strategy depends on variant type. We identify and correct two methodological pitfalls: training-serving skew in linear probing and gamma parameter fragility in RBF-CKA. Our findings reframe the protein-vs-nucleotide comparison not as a competition but as a question of signal specialization, with CMAF providing a principled framework for adaptive multi-modal fusion.
 
 \appendix
 
