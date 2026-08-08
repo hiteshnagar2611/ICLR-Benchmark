@@ -102,6 +102,13 @@ An XGBoost classifier takes 29 features: 20 foundation model scores (5 protein M
 
 We introduce \textbf{Cross-Modal Attention Fusion (CMAF)}, a novel architecture that learns modality-specific attention weights to adaptively combine protein and DNA signals per variant. Unlike static ensembles (e.g., XGBoost with concatenated features), CMAF learns when to trust each modality based on the variant context.
 
+\textbf{Theoretical motivation.} The optimal fusion strategy depends on the information content of each modality for a given input. From an information-theoretic perspective, attention mechanisms can be viewed as learned gating functions that maximize mutual information between the fused representation and the target variable $\hat{y}$:
+\begin{equation}
+    \max_{\alpha} I(\mathbf{z}_{\text{fused}}; y) = \max_{\alpha} I(\alpha_p \mathbf{z}_p + \alpha_d \mathbf{z}_d; y)
+    \label{eq:info}
+\end{equation}
+where $\alpha_p$ and $\alpha_d$ are modality-specific weights. When protein and DNA features encode complementary information (as demonstrated by CKA = 0.031), attention can selectively amplify the most informative modality for each variant. However, when modalities are correlated ($r = 0.37$), the marginal gain from attention may be small, which our ablation study confirms (Section~\ref{sec:ablation}).
+
 \textbf{Architecture.} CMAF consists of four components:
 
 \begin{enumerate}
@@ -317,7 +324,50 @@ CMAF achieves AUROC 0.928 on D1 and 0.902 on D2, competitive with the 29-feature
 
 \textbf{Interpretation.} While ESM1b achieves higher individual AUROC (0.882 vs 0.819), EVO2 provides complementary evolutionary conservation signal that the attention mechanism exploits. For missense variants, both amino acid-level effects (ESM1b) and evolutionary constraint (EVO2) matter, but EVO2's conservation signal appears more discriminative when combined via attention. This finding suggests that the optimal modality weighting depends on the specific biological context, and adaptive fusion can outperform static ensembles.
 
+\textbf{Why does DNA dominate?} We analyze the feature statistics to understand why EVO2 receives higher gate weight (Table~\ref{tab:feature_stats}). After standardization, EVO2 delta score has larger absolute range ($-9.5$ to $19.8$) compared to ESM1b ($-3.3$ to $0.9$), despite both having unit variance. The EVO2 wild-type and mutant scores individually carry almost no signal ($r \approx 0$), but their difference (delta) captures evolutionary constraint with $r = 0.43$ correlation with pathogenicity. This suggests EVO2's value lies in measuring sequence conservation rather than absolute fitness.
+
+\begin{table}[h]
+\centering
+\caption{Feature statistics after standardization. EVO2 delta has larger dynamic range than ESM1b, despite similar variance.}
+\label{tab:feature_stats}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Feature} & \textbf{Range} & \textbf{Std} & \textbf{Correlation ($r$)} \\
+\midrule
+ESM1b MLM & $[-3.3, 0.9]$ & 1.000 & 0.643 \\
+ESM-2 MLM & $[-3.5, 1.1]$ & 1.000 & 0.593 \\
+ESM-1v MLM & $[-3.3, 1.0]$ & 1.000 & 0.637 \\
+\midrule
+EVO2 delta & $[-9.5, 19.8]$ & 1.000 & 0.427 \\
+EVO2 wild-type & $[-2.1, 2.0]$ & 1.000 & 0.006 \\
+EVO2 mutant & $[-2.0, 2.1]$ & 1.000 & $-0.005$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \textbf{Comparison with baselines.} CMAF outperforms all linear fusion methods (LR-ESM1b+EVO2: 0.895, LR-ESM1b+EVO2+Phys: 0.897) and individual models (ESM1b: 0.882, EVO2: 0.819). It approaches the XGBoost V1 meta-learner (0.935) with greater interpretability and fewer features.
+
+\textbf{Ablation study.} \label{sec:ablation} We ablate CMAF components to quantify their contribution (Table~\ref{tab:cmaf_ablation}). Surprisingly, simple concatenation achieves the highest AUROC (0.927), outperforming the full CMAF (0.925, paired t-test $p = 0.009$). This suggests that for missense variants, the non-linear interactions captured by attention and gating provide marginal benefit over direct feature concatenation. The attention mechanism shows a small but significant effect ($p = 0.029$), while gating does not significantly improve performance ($p = 0.294$).
+
+\begin{table}[h]
+\centering
+\caption{CMAF ablation study. We compare configurations with and without cross-modal attention and gating. Statistics: mean AUROC over 5 runs with different random seeds.}
+\label{tab:cmaf_ablation}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Configuration} & \textbf{AUROC (mean $\pm$ std)} & \textbf{Time (s)} & \textbf{$p$-value vs Full} \\
+\midrule
+Concat Only & \textbf{0.9272 $\pm$ 0.0001} & 42 & 0.009** \\
+No Attention (gating only) & 0.9260 $\pm$ 0.0005 & 33 & 0.029* \\
+No Gating (attention only) & 0.9255 $\pm$ 0.0005 & 29 & 0.294 ns \\
+CMAF (Full) & 0.9245 $\pm$ 0.0012 & 36 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The finding that simple concatenation outperforms attention-based fusion has important implications: for missense variants where protein and DNA features are moderately correlated ($r = 0.37$), the additional complexity of attention mechanisms may not be justified. However, CMAF provides interpretable modality weights that reveal the relative importance of each signal, which is valuable for understanding model behavior.
 
 Figure~\ref{fig:cmaf_architecture} shows the CMAF architecture. Figure~\ref{fig:gate_weights} presents the learned gate weight distributions, and Figure~\ref{fig:attention_heatmap} shows the cross-modal attention patterns across heads.
 
