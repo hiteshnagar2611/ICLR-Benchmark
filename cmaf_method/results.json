@@ -1,0 +1,40 @@
+{
+  "method": "Cross-Modal Attention Fusion (CMAF)",
+  "architecture": {
+    "protein_dim": 7,
+    "dna_dim": 3,
+    "aux_dim": 7,
+    "hidden_dim": 64,
+    "n_heads": 4
+  },
+  "best_params": {
+    "hidden_dim": 64,
+    "n_heads": 4,
+    "lr": 0.0005,
+    "weight_decay": 0.0001
+  },
+  "train_stats": {
+    "n_train": 23113,
+    "n_test": 6482,
+    "n_pathogenic_train": 11932,
+    "n_benign_train": 11181
+  },
+  "test_metrics": {
+    "AUROC": 0.927637608839554,
+    "AUPRC": 0.933615691943366,
+    "MCC": 0.7219666202616265
+  },
+  "gate_analysis": {
+    "protein_weight_mean": 0.07989148795604706,
+    "dna_weight_mean": 0.9201085567474365
+  },
+  "d2_results": {
+    "AUROC": 0.9021560269293444,
+    "AUPRC": 0.8720058477897923,
+    "MCC": 0.68795342510123,
+    "gate_weights": {
+      "protein_mean": 0.3283526301383972,
+      "dna_mean": 0.6716473698616028
+    }
+  }
+}

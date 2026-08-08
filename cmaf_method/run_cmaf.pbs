@@ -1,0 +1,32 @@
+#!/bin/bash
+#PBS -N cmaf_training
+#PBS -q apolloq
+#PBS -l select=1:ncpus=10:ngpus=1:mem=64gb:host=gnode6
+#PBS -l walltime=06:00:00
+#PBS -P external
+#PBS -j oe
+
+cd /ibdc-scratch2/home/Csir-igib001_lthukral/hitesh/bech_v4
+
+source activate /ibdc-scratch2/home/Csir-igib001_lthukral/.conda/envs/evo2
+
+export PYTHONUNBUFFERED=1
+
+echo "=== Environment ==="
+echo "Python: $(python --version)"
+echo "PyTorch: $(python -c 'import torch; print(torch.__version__)')"
+echo "CUDA: $(python -c 'import torch; print(torch.cuda.is_available())')"
+echo "GPU: $(python -c 'import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "None")')"
+echo "Date: $(date)"
+echo ""
+
+echo "=== Running CMAF Training ==="
+python train_cmaf.py dataset1_clinvar_only dataset2_jan2025 2>&1
+
+echo ""
+echo "=== Generating Plots ==="
+python plot_cmaf.py dataset1_clinvar_only 2>&1
+
+echo ""
+echo "=== Done ==="
+echo "Date: $(date)"
